@@ -8,7 +8,7 @@ export function HomePage() {
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-      <main className="flex-1 flex flex-col items-center justify-center px-8 pb-16">
+      <main className="flex-1 flex flex-col items-center px-8 pt-12 pb-16">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
