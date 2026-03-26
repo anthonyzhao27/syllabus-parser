@@ -1,6 +1,8 @@
-# Syllabus Parser
+# Syllabuddy
 
-A web app that extracts assignments and due dates from course syllabi, exports them to your calendar, and sends AI friend-style SMS reminders before deadlines.
+Syllabuddy is a web app that extracts assignments and due dates from course syllabi, exports them to your calendar, and sends AI friend-style SMS reminders before deadlines.
+
+The name is a play on "syllabus" and "buddy," reflecting the core product idea: a study companion that helps you stay on top of deadlines and succeed in your courses.
 
 ## Project Structure
 
