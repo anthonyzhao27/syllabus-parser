@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Syllabus parser — a web app that extracts assignments/due dates from course syllabi, exports to calendars, and sends AI friend-style SMS reminders. See `OVERVIEW.md` for full details.
+Syllabuddy — a web app that extracts assignments and due dates from course syllabi, exports them to calendars, and sends AI friend-style SMS reminders. The name combines "syllabus" and "buddy" to emphasize that the app is meant to feel like a helpful academic companion. See `OVERVIEW.md` for full details.
 
 ## Tech Stack
 
