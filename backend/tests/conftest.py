@@ -35,13 +35,3 @@ def create_fixtures() -> None:
         table.rows[0].cells[0].text = "Quiz 1"
         table.rows[0].cells[1].text = "Feb 14, 2025"
         doc.save(str(docx_path))
-
-    # HTML
-    html_path = FIXTURES / "sample.html"
-    if not html_path.exists():
-        html_path.write_text(
-            "<html><body><h1>CS 101</h1>"
-            "<p>Final Project due April 20, 2025</p>"
-            "<script>var x = 1;</script>"
-            "</body></html>"
-        )

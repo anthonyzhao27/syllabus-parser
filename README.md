@@ -21,7 +21,7 @@ syllabus-parser/
 │   ├── src/
 │   │   ├── app/
 │   │   │   ├── layout.tsx
-│   │   │   ├── page.tsx               # Upload/paste landing page
+│   │   │   ├── page.tsx               # Upload landing page
 │   │   │   └── results/
 │   │   │       └── page.tsx           # Parsed events review + export
 │   │   ├── components/
@@ -47,7 +47,7 @@ syllabus-parser/
 │   │   │   ├── export.py              # POST /export
 │   │   │   └── reminders.py           # POST /reminders
 │   │   ├── services/
-│   │   │   ├── extraction.py          # PyMuPDF / pdfplumber / python-docx / HTML
+│   │   │   ├── extraction.py          # PyMuPDF / pdfplumber / python-docx
 │   │   │   ├── google_docs.py
 │   │   │   ├── llm.py                 # OpenAI structured extraction
 │   │   │   ├── calendar.py

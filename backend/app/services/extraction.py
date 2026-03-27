@@ -1,9 +1,8 @@
-"""Text extraction from PDF, Word, HTML, and screenshot images."""
+"""Text extraction from PDF, Word, and screenshot images."""
 
 import base64
 import io
 from collections.abc import Awaitable, Callable
-from html.parser import HTMLParser
 from zipfile import BadZipFile
 
 import fitz
@@ -142,35 +141,6 @@ def _extract_docx(data: bytes) -> str:
     return "\n".join(parts)
 
 
-class _HTMLTextExtractor(HTMLParser):
-    def __init__(self) -> None:
-        super().__init__()
-        self._parts: list[str] = []
-        self._skip = False
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag in ("script", "style"):
-            self._skip = True
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag in ("script", "style"):
-            self._skip = False
-
-    def handle_data(self, data: str) -> None:
-        if not self._skip:
-            self._parts.append(data)
-
-    def get_text(self) -> str:
-        return " ".join(self._parts)
-
-
-def _extract_html(data: bytes) -> str:
-    """Extract visible text from HTML bytes."""
-    parser = _HTMLTextExtractor()
-    parser.feed(data.decode("utf-8", errors="replace"))
-    return parser.get_text().strip()
-
-
 async def _extract_images_via_vision(images_data: list[bytes]) -> str:
     """Use OpenAI vision to extract text from one or more screenshot images."""
     client = AsyncOpenAI(api_key=settings.openai_api_key)
@@ -215,14 +185,11 @@ Handler = SyncHandler | AsyncHandler
 CONTENT_TYPE_MAP: dict[str, Handler] = {
     "application/pdf": _extract_pdf,
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": _extract_docx,
-    "text/html": _extract_html,
 }
 
 EXTENSION_MAP: dict[str, Handler] = {
     ".pdf": _extract_pdf,
     ".docx": _extract_docx,
-    ".html": _extract_html,
-    ".htm": _extract_html,
 }
 
 

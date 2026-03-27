@@ -41,4 +41,4 @@ export type ParseResponse = {
   events: ParsedEvent[];
 };
 
-export type UploadMode = "file" | "url" | "paste";
+export type UploadMode = "file" | "url";
