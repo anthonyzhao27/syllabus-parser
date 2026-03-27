@@ -7,12 +7,11 @@ import { parseSyllabus } from "@/lib/api";
 import { LoadingScreen } from "./loading-screen";
 import type { UploadMode } from "@/types";
 
-const ACCEPTED_TYPES = ".pdf,.docx,.html,.htm,.png,.jpg,.jpeg,.webp";
+const ACCEPTED_TYPES = ".pdf,.docx,.png,.jpg,.jpeg,.webp";
 
 const MODES: { key: UploadMode; label: string; icon: React.ReactNode }[] = [
   { key: "file", label: "File Upload", icon: <Upload className="w-4 h-4" /> },
   { key: "url", label: "Google Docs URL", icon: <Link className="w-4 h-4" /> },
-  { key: "paste", label: "Paste HTML", icon: <FileText className="w-4 h-4" /> },
 ];
 
 export function UploadForm() {
@@ -21,7 +20,6 @@ export function UploadForm() {
   const [mode, setMode] = useState<UploadMode>("file");
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState("");
-  const [html, setHtml] = useState("");
   const [semesterStart, setSemesterStart] = useState("");
   const [semesterEnd, setSemesterEnd] = useState("");
 
@@ -56,11 +54,8 @@ export function UploadForm() {
         formData.append("files", file);
       } else if (mode === "url" && url.trim()) {
         formData.append("google_doc_url", url.trim());
-      } else if (mode === "paste" && html.trim()) {
-        const blob = new Blob([html], { type: "text/html" });
-        formData.append("files", blob, "pasted.html");
       } else {
-        setError("Please provide a file, URL, or pasted content.");
+        setError("Please provide a file or URL.");
         setLoading(false);
         return;
       }
@@ -144,7 +139,7 @@ export function UploadForm() {
                       Drop a file here or click to browse
                     </p>
                     <p className="text-sm text-warm-400">
-                      PDF, DOCX, HTML, or image (PNG, JPG, WebP)
+                      PDF, DOCX, or image (PNG, JPG, WebP)
                     </p>
                   </div>
                 </div>
@@ -165,15 +160,6 @@ export function UploadForm() {
             </div>
           )}
 
-          {mode === "paste" && (
-            <textarea
-              value={html}
-              onChange={(e) => setHtml(e.target.value)}
-              placeholder="Paste your syllabus HTML content here..."
-              rows={6}
-              className="w-full bg-white border border-warm-200 rounded-xl px-4 py-3.5 text-sm text-warm-700 placeholder:text-warm-400 focus:outline-none focus:border-mint-400 focus:ring-2 focus:ring-mint-100 transition-all duration-200 resize-none"
-            />
-          )}
         </div>
 
         <div className="flex gap-4">

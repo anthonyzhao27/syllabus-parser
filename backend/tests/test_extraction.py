@@ -9,7 +9,6 @@ from fastapi import HTTPException
 
 from app.services.extraction import (
     _extract_docx,
-    _extract_html,
     _extract_pdf,
     _extract_pdf_text,
     _is_image,
@@ -39,16 +38,6 @@ def test_extract_docx() -> None:
     text = _extract_docx(data)
     assert "Midterm Exam" in text
     assert "Quiz 1" in text
-
-
-# ── HTML ─────────────────────────────────────────────
-
-
-def test_extract_html() -> None:
-    data = (FIXTURES / "sample.html").read_bytes()
-    text = _extract_html(data)
-    assert "Final Project" in text
-    assert "var x" not in text
 
 
 # ── Dispatcher ───────────────────────────────────────
