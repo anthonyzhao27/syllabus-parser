@@ -26,6 +26,7 @@ class ParsedEvent(BaseModel):
     event_type: EventType = EventType.OTHER
     description: str = ""
     time_specified: bool = True
+    duration_minutes: int | None = None
 
 
 class ParseResponse(BaseModel):

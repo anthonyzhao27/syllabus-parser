@@ -74,21 +74,14 @@ def _build_summary(event: ParsedEvent) -> str:
 
 
 def _timed_event_end(event: ParsedEvent, start: datetime) -> datetime:
-    """Use a short marker window for deadline-like events, 1 hour otherwise."""
-    deadline_like = {
-        "assignment",
-        "project",
-        "milestone",
-        "deadline",
-        "lab",
-        "discussion",
-        "other",
-    }
+    """Calculate end time from duration_minutes or fallback defaults."""
+    if event.duration_minutes is not None and event.duration_minutes > 0:
+        return start + timedelta(minutes=event.duration_minutes)
 
-    if str(event.event_type) in deadline_like:
-        return start + timedelta(minutes=5)
+    if str(event.event_type) in {"exam", "quiz", "presentation"}:
+        return start + timedelta(hours=1)
 
-    return start + timedelta(hours=1)
+    return start + timedelta(minutes=30)
 
 
 def create_ics(

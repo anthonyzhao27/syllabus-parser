@@ -31,6 +31,7 @@ function transformEvent(
     course: raw.course,
     type,
     isAmbiguous: false,
+    durationMinutes: raw.duration_minutes ?? undefined,
   };
 }
 
@@ -42,6 +43,7 @@ function toApiEvents(events: ParsedEvent[]) {
     event_type: e.type,
     description: e.description || "",
     time_specified: Boolean(e.time),
+    duration_minutes: e.durationMinutes ?? null,
   }));
 }
 

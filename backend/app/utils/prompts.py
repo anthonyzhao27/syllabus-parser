@@ -18,6 +18,8 @@ Rules:
    - "description" (string): brief description if available, else ""
    - "time_specified" (boolean): true if the syllabus explicitly states a time, \
 false if only a date was given and you inferred the time
+   - "duration_minutes" (integer or null): duration in minutes if explicitly \
+stated in syllabus (e.g., "2-hour exam" = 120), null if not specified
 3. If only a date is given with no time, use 23:59:00 (end of day) and set \
 "time_specified": false.
 4. If a specific time is stated (e.g. "due at 11:59 PM", "exam at 2:00 PM"), \
@@ -38,7 +40,8 @@ Example output:
     "course": "CS 101",
     "event_type": "assignment",
     "description": "Chapters 1-3 exercises",
-    "time_specified": false
+    "time_specified": false,
+    "duration_minutes": null
   },
   {
     "title": "Midterm Exam",
@@ -46,7 +49,8 @@ Example output:
     "course": "CS 101",
     "event_type": "exam",
     "description": "Covers chapters 1-5",
-    "time_specified": true
+    "time_specified": true,
+    "duration_minutes": 120
   }
 ]
 """

@@ -4,11 +4,12 @@ import pytest
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
-from app.models.schemas import ParsedEvent
+from app.models.schemas import EventType, ParsedEvent
 from app.services.google_calendar import (
     _find_calendar_by_name,
     _create_calendar,
     _get_or_create_calendar,
+    _build_calendar_event,
     export_to_google_calendar_sync,
 )
 from app.services.calendar_utils import MissingCourseCodeError, MixedCourseError
@@ -133,7 +134,7 @@ class TestGoogleCalendarExport:
                 title="HW1",
                 due_date=datetime(2024, 1, 15),
                 course="CSC413",
-                type="assignment",
+                event_type=EventType.ASSIGNMENT,
             ),
         ]
 
@@ -152,7 +153,7 @@ class TestGoogleCalendarExport:
                 title="HW1",
                 due_date=datetime(2024, 1, 15),
                 course="",
-                type="assignment",
+                event_type=EventType.ASSIGNMENT,
             ),
         ]
 
@@ -165,13 +166,13 @@ class TestGoogleCalendarExport:
                 title="HW1",
                 due_date=datetime(2024, 1, 15),
                 course="CSC413",
-                type="assignment",
+                event_type=EventType.ASSIGNMENT,
             ),
             ParsedEvent(
                 title="HW2",
                 due_date=datetime(2024, 1, 20),
                 course="CSC420",
-                type="assignment",
+                event_type=EventType.ASSIGNMENT,
             ),
         ]
 
@@ -196,13 +197,13 @@ class TestGoogleCalendarExport:
                 title="HW1",
                 due_date=datetime(2024, 1, 15),
                 course="csc413",
-                type="assignment",
+                event_type=EventType.ASSIGNMENT,
             ),
             ParsedEvent(
                 title="HW2",
                 due_date=datetime(2024, 1, 20),
                 course="CSC413",
-                type="assignment",
+                event_type=EventType.ASSIGNMENT,
             ),
         ]
 
@@ -212,3 +213,47 @@ class TestGoogleCalendarExport:
         assert result["calendar_name"] == "Syllabuddy - CSC413"
         assert len(result["created"]) == 2
         assert len(result["errors"]) == 0
+
+
+class TestBuildCalendarEvent:
+    def test_uses_duration_minutes_for_end_time(self):
+        event = ParsedEvent(
+            title="Midterm",
+            due_date=datetime(2025, 2, 15, 14, 0),
+            course="CS101",
+            event_type=EventType.EXAM,
+            time_specified=True,
+            duration_minutes=90,
+        )
+        result = _build_calendar_event(event, "America/New_York")
+
+        assert result["start"]["dateTime"] == "2025-02-15T14:00:00-05:00"
+        assert result["end"]["dateTime"] == "2025-02-15T15:30:00-05:00"
+
+    def test_fallback_duration_for_exam_without_duration(self):
+        event = ParsedEvent(
+            title="Final",
+            due_date=datetime(2025, 4, 20, 9, 0),
+            course="CS101",
+            event_type=EventType.EXAM,
+            time_specified=True,
+            duration_minutes=None,
+        )
+        result = _build_calendar_event(event, "UTC")
+
+        assert "10:00:00" in result["end"]["dateTime"]
+
+    def test_all_day_event_structure(self):
+        event = ParsedEvent(
+            title="Project Due",
+            due_date=datetime(2025, 3, 1, 23, 59),
+            course="CS101",
+            event_type=EventType.PROJECT,
+            time_specified=False,
+            duration_minutes=None,
+        )
+        result = _build_calendar_event(event, "UTC")
+
+        assert "date" in result["start"]
+        assert "dateTime" not in result["start"]
+        assert result["start"]["date"] == "2025-03-01"
