@@ -3,11 +3,19 @@
 import json
 import logging
 import re
+from datetime import date
+from datetime import time as dt_time
 
 from openai import AsyncOpenAI
 
 from app.config import settings
-from app.models.schemas import EventType, ParsedEvent
+from app.models.schemas import (
+    EventType,
+    LLMExtractionResult,
+    ParsedEvent,
+    RecurringEvent,
+)
+from app.services.recurrence import expand_all_recurrences
 from app.utils.prompts import EXTRACTION_PROMPT
 
 logger = logging.getLogger(__name__)
@@ -147,6 +155,79 @@ def _normalize_event_payload(item: dict) -> dict:
     return normalized
 
 
+def _normalize_recurring_payload(item: dict) -> dict:
+    """Normalize recurring event payload before Pydantic validation."""
+    normalized = dict(item)
+    normalized["event_type"] = normalize_event_type(normalized.get("event_type", ""))
+    normalized["duration_minutes"] = _parse_duration(normalized.get("duration_minutes"))
+
+    if "recurrence" in normalized and isinstance(normalized["recurrence"], dict):
+        rec = normalized["recurrence"]
+
+        if isinstance(rec.get("start_date"), str):
+            rec["start_date"] = date.fromisoformat(rec["start_date"])
+        if isinstance(rec.get("end_date"), str):
+            rec["end_date"] = date.fromisoformat(rec["end_date"])
+
+        if isinstance(rec.get("time"), str):
+            rec["time"] = dt_time.fromisoformat(rec["time"])
+
+        if isinstance(rec.get("exclusions"), list):
+            parsed_exclusions: list[date] = []
+            for d in rec["exclusions"]:
+                try:
+                    parsed_exclusions.append(
+                        date.fromisoformat(d) if isinstance(d, str) else d
+                    )
+                except (ValueError, TypeError):
+                    logger.warning("Skipping invalid exclusion date %r", d)
+            rec["exclusions"] = parsed_exclusions
+
+        if isinstance(rec.get("weekday"), str):
+            rec["weekday"] = rec["weekday"].lower()
+
+    return normalized
+
+
+def _parse_extraction_result(raw: str) -> LLMExtractionResult:
+    """Parse raw JSON into LLMExtractionResult with both event types."""
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        stripped = (
+            raw.strip()
+            .removeprefix("```json")
+            .removeprefix("```")
+            .removesuffix("```")
+            .strip()
+        )
+        try:
+            data = json.loads(stripped)
+        except json.JSONDecodeError:
+            raise ValueError(f"Could not parse LLM response as JSON: {raw[:200]}")
+
+    if not isinstance(data, dict):
+        raise ValueError(f"Expected JSON object, got {type(data).__name__}")
+
+    events: list[ParsedEvent] = []
+    for item in data.get("events", []):
+        try:
+            normalized = _normalize_event_payload(item)
+            events.append(ParsedEvent(**normalized))
+        except Exception as e:
+            logger.warning("Skipping malformed event %r: %s", item, e)
+
+    recurring_events: list[RecurringEvent] = []
+    for item in data.get("recurring_events", []):
+        try:
+            normalized = _normalize_recurring_payload(item)
+            recurring_events.append(RecurringEvent(**normalized))
+        except Exception as e:
+            logger.warning("Skipping malformed recurring event %r: %s", item, e)
+
+    return LLMExtractionResult(events=events, recurring_events=recurring_events)
+
+
 async def extract_events(text: str) -> list[ParsedEvent]:
     """Send syllabus text to OpenAI and return structured events."""
     client = AsyncOpenAI(api_key=settings.openai_api_key)
@@ -162,9 +243,13 @@ async def extract_events(text: str) -> list[ParsedEvent]:
     )
 
     raw = response.choices[0].message.content or ""
-    events = _parse_events(raw)
-    events = _apply_all_smart_defaults(events)
-    return events
+
+    result = _parse_extraction_result(raw)
+    expanded = expand_all_recurrences(result.recurring_events)
+    all_events = result.events + expanded
+    all_events = _apply_all_smart_defaults(all_events)
+
+    return all_events
 
 
 def _parse_events(raw: str) -> list[ParsedEvent]:
