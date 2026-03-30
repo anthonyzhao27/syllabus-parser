@@ -20,6 +20,7 @@ export type ApiEvent = {
   event_type: string;
   description: string;
   time_specified: boolean;
+  duration_minutes?: number | null;
 };
 
 export type ApiParseResponse = {
@@ -35,6 +36,7 @@ export type ParsedEvent = {
   course: string;
   type: EventType;
   isAmbiguous: boolean;
+  durationMinutes?: number;
 };
 
 export type ParseResponse = {

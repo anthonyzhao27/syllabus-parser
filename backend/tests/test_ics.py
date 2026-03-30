@@ -203,3 +203,47 @@ class TestCreateIcs:
         ics = create_ics(events, "UTC", calendar_name="Math, Logic & More")
 
         assert "X-WR-CALNAME:Math\\, Logic & More" in ics
+
+
+class TestIcsDuration:
+    def test_uses_event_duration_90_minutes(self):
+        event = ParsedEvent(
+            title="Midterm",
+            due_date=datetime(2025, 2, 15, 14, 0),
+            course="CS101",
+            event_type=EventType.EXAM,
+            time_specified=True,
+            duration_minutes=90,
+        )
+        ics = create_ics([event], "UTC", "Test Calendar")
+
+        assert "DTSTART:20250215T140000Z" in ics
+        assert "DTEND:20250215T153000Z" in ics
+
+    def test_uses_event_duration_30_minutes(self):
+        event = ParsedEvent(
+            title="Homework",
+            due_date=datetime(2025, 1, 30, 17, 0),
+            course="CS101",
+            event_type=EventType.ASSIGNMENT,
+            time_specified=True,
+            duration_minutes=30,
+        )
+        ics = create_ics([event], "UTC", "Test Calendar")
+
+        assert "DTSTART:20250130T170000Z" in ics
+        assert "DTEND:20250130T173000Z" in ics
+
+    def test_fallback_duration_for_exam_without_duration(self):
+        event = ParsedEvent(
+            title="Final",
+            due_date=datetime(2025, 4, 20, 9, 0),
+            course="CS101",
+            event_type=EventType.EXAM,
+            time_specified=True,
+            duration_minutes=None,
+        )
+        ics = create_ics([event], "UTC", "Test Calendar")
+
+        assert "DTSTART:20250420T090000Z" in ics
+        assert "DTEND:20250420T100000Z" in ics

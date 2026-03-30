@@ -2,15 +2,117 @@
 
 import json
 import logging
+import re
+from datetime import date
+from datetime import time as dt_time
 
-from fastapi import HTTPException
 from openai import AsyncOpenAI
 
 from app.config import settings
-from app.models.schemas import EventType, ParsedEvent
+from app.models.schemas import (
+    EventType,
+    LLMExtractionResult,
+    ParsedEvent,
+    RecurringEvent,
+)
+from app.services.recurrence import expand_all_recurrences
 from app.utils.prompts import EXTRACTION_PROMPT
 
 logger = logging.getLogger(__name__)
+
+DURATION_PATTERN = re.compile(
+    r"^\s*(\d+(?:\.\d+)?)\s*(hours?|hrs?|minutes?|mins?|m|h)\s*$",
+    re.IGNORECASE,
+)
+
+DEFAULT_DURATIONS: dict[EventType, int] = {
+    EventType.EXAM: 120,
+    EventType.QUIZ: 30,
+    EventType.PRESENTATION: 30,
+}
+
+DEFAULT_TIMED_DURATION = 30
+
+DEADLINE_LIKE_TYPES: set[str] = {
+    "assignment",
+    "project",
+    "milestone",
+    "deadline",
+    "lab",
+    "discussion",
+    "other",
+}
+
+
+def _parse_duration(value: int | float | str | None) -> int | None:
+    if value is None:
+        return None
+
+    if isinstance(value, int):
+        return value if value > 0 else None
+
+    if isinstance(value, (str, float)):
+        try:
+            as_int = int(float(value))
+            return as_int if as_int > 0 else None
+        except (ValueError, TypeError):
+            pass
+
+    if isinstance(value, str):
+        match = DURATION_PATTERN.match(value.strip())
+        if match:
+            amount = float(match.group(1))
+            unit = match.group(2).lower()
+
+            if unit.startswith("h"):
+                minutes = int(amount * 60)
+            else:
+                minutes = int(amount)
+
+            return minutes if minutes > 0 else None
+
+    return None
+
+
+def _apply_smart_defaults(event: ParsedEvent) -> ParsedEvent:
+    if event.duration_minutes is not None and event.duration_minutes > 0:
+        return event
+
+    if not event.time_specified:
+        return event
+
+    event_time = event.due_date.time()
+    is_2359 = event_time.hour == 23 and event_time.minute == 59
+    is_deadline_like = str(event.event_type) in DEADLINE_LIKE_TYPES
+
+    if is_2359 and is_deadline_like:
+        adjusted_date = event.due_date.replace(hour=23, minute=30, second=0)
+        return ParsedEvent(
+            title=event.title,
+            due_date=adjusted_date,
+            course=event.course,
+            event_type=event.event_type,
+            description=event.description,
+            time_specified=event.time_specified,
+            duration_minutes=DEFAULT_TIMED_DURATION,
+        )
+
+    duration = DEFAULT_DURATIONS.get(event.event_type, DEFAULT_TIMED_DURATION)
+
+    return ParsedEvent(
+        title=event.title,
+        due_date=event.due_date,
+        course=event.course,
+        event_type=event.event_type,
+        description=event.description,
+        time_specified=event.time_specified,
+        duration_minutes=duration,
+    )
+
+
+def _apply_all_smart_defaults(events: list[ParsedEvent]) -> list[ParsedEvent]:
+    return [_apply_smart_defaults(e) for e in events]
+
 
 EVENT_TYPE_SYNONYMS: dict[str, EventType] = {
     "midterm": EventType.EXAM,
@@ -48,7 +150,82 @@ def _normalize_event_payload(item: dict) -> dict:
     normalized = dict(item)
     normalized["event_type"] = normalize_event_type(normalized.get("event_type", ""))
     normalized.setdefault("time_specified", True)
+    raw_duration = normalized.get("duration_minutes")
+    normalized["duration_minutes"] = _parse_duration(raw_duration)
     return normalized
+
+
+def _normalize_recurring_payload(item: dict) -> dict:
+    """Normalize recurring event payload before Pydantic validation."""
+    normalized = dict(item)
+    normalized["event_type"] = normalize_event_type(normalized.get("event_type", ""))
+    normalized["duration_minutes"] = _parse_duration(normalized.get("duration_minutes"))
+
+    if "recurrence" in normalized and isinstance(normalized["recurrence"], dict):
+        rec = normalized["recurrence"]
+
+        if isinstance(rec.get("start_date"), str):
+            rec["start_date"] = date.fromisoformat(rec["start_date"])
+        if isinstance(rec.get("end_date"), str):
+            rec["end_date"] = date.fromisoformat(rec["end_date"])
+
+        if isinstance(rec.get("time"), str):
+            rec["time"] = dt_time.fromisoformat(rec["time"])
+
+        if isinstance(rec.get("exclusions"), list):
+            parsed_exclusions: list[date] = []
+            for d in rec["exclusions"]:
+                try:
+                    parsed_exclusions.append(
+                        date.fromisoformat(d) if isinstance(d, str) else d
+                    )
+                except (ValueError, TypeError):
+                    logger.warning("Skipping invalid exclusion date %r", d)
+            rec["exclusions"] = parsed_exclusions
+
+        if isinstance(rec.get("weekday"), str):
+            rec["weekday"] = rec["weekday"].lower()
+
+    return normalized
+
+
+def _parse_extraction_result(raw: str) -> LLMExtractionResult:
+    """Parse raw JSON into LLMExtractionResult with both event types."""
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        stripped = (
+            raw.strip()
+            .removeprefix("```json")
+            .removeprefix("```")
+            .removesuffix("```")
+            .strip()
+        )
+        try:
+            data = json.loads(stripped)
+        except json.JSONDecodeError:
+            raise ValueError(f"Could not parse LLM response as JSON: {raw[:200]}")
+
+    if not isinstance(data, dict):
+        raise ValueError(f"Expected JSON object, got {type(data).__name__}")
+
+    events: list[ParsedEvent] = []
+    for item in data.get("events", []):
+        try:
+            normalized = _normalize_event_payload(item)
+            events.append(ParsedEvent(**normalized))
+        except Exception as e:
+            logger.warning("Skipping malformed event %r: %s", item, e)
+
+    recurring_events: list[RecurringEvent] = []
+    for item in data.get("recurring_events", []):
+        try:
+            normalized = _normalize_recurring_payload(item)
+            recurring_events.append(RecurringEvent(**normalized))
+        except Exception as e:
+            logger.warning("Skipping malformed recurring event %r: %s", item, e)
+
+    return LLMExtractionResult(events=events, recurring_events=recurring_events)
 
 
 async def extract_events(text: str) -> list[ParsedEvent]:
@@ -66,7 +243,13 @@ async def extract_events(text: str) -> list[ParsedEvent]:
     )
 
     raw = response.choices[0].message.content or ""
-    return _parse_events(raw)
+
+    result = _parse_extraction_result(raw)
+    expanded = expand_all_recurrences(result.recurring_events)
+    all_events = result.events + expanded
+    all_events = _apply_all_smart_defaults(all_events)
+
+    return all_events
 
 
 def _parse_events(raw: str) -> list[ParsedEvent]:
