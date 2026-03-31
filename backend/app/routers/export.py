@@ -26,13 +26,6 @@ from app.services.ics import create_ics
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-
-@router.post("/")
-async def export_calendar(request: ExportRequest):
-    """Legacy endpoint - export parsed events."""
-    return {"status": "not implemented"}
-
-
 @router.post("/ics")
 async def export_ics(request: IcsExportRequest) -> Response:
     """Generate and return an .ics file for download."""
