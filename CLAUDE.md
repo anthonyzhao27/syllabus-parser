@@ -34,11 +34,13 @@ npm run build      # production build
 
 ```bash
 cd backend
-pip install -e ".[dev]"                    # install dependencies
-uvicorn app.main:app --reload              # start dev server
-black app/ tests/                          # format
-flake8 app/ tests/                         # lint
-pytest                                     # run tests
+python3 -m venv .venv                      # create local virtualenv
+source .venv/bin/activate                  # activate local virtualenv
+python -m pip install -e ".[dev]"          # install dependencies
+python -m uvicorn app.main:app --reload    # start dev server
+python -m black app/ tests/                # format
+python -m flake8 app/ tests/               # lint
+python -m pytest                           # run tests
 ```
 
 ## Code Style & Conventions
