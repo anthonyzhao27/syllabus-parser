@@ -11,7 +11,7 @@ app = FastAPI(
 
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    "https://syllabuddy.vercel.app",
+    "https://syllabuddy-pi.vercel.app",
 ]
 
 app.add_middleware(
