@@ -1,11 +1,16 @@
 import logging
 from collections import Counter
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
 from app.middleware.auth import AuthenticatedUser, get_current_user
+from app.middleware.limiter import limiter
 from app.models.schemas import ParseResponse
-from app.services.extraction import _is_image, extract_text, extract_text_from_images
+from app.services.extraction import (
+    classify_upload,
+    extract_text,
+    extract_text_from_images,
+)
 from app.services.llm import extract_events
 from app.services import storage as storage_service
 
@@ -14,7 +19,9 @@ logger = logging.getLogger(__name__)
 
 
 @router.post("/", response_model=ParseResponse)
+@limiter.limit("10/hour;30/day")
 async def parse_syllabus(
+    request: Request,
     files: list[UploadFile] = File(default=[]),
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> ParseResponse:
@@ -28,20 +35,27 @@ async def parse_syllabus(
 
     await storage_service.validate_total_upload_size(files)
 
-    if _is_image(files[0]):
-        if not all(_is_image(file) for file in files):
-            raise HTTPException(
-                status_code=400,
-                detail="When uploading screenshots, all files must be images.",
-            )
+    first_kind = await classify_upload(files[0])
+
+    if first_kind == "image":
+        for file in files[1:]:
+            kind = await classify_upload(file)
+            if kind != "image":
+                raise HTTPException(
+                    status_code=400,
+                    detail=("When uploading screenshots, all files must be images."),
+                )
         text = await extract_text_from_images(files)
     else:
         if len(files) > 1:
             raise HTTPException(
                 status_code=400,
-                detail="Only one document file allowed. For multiple images, use screenshots.",
+                detail=(
+                    "Only one document file allowed. "
+                    "For multiple images, use screenshots."
+                ),
             )
-        text = await extract_text(files[0])
+        text = await extract_text(files[0], mime=first_kind)
 
     try:
         events = await extract_events(text)

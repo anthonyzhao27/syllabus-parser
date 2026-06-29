@@ -389,6 +389,11 @@ export async function exportToGoogleCalendar(
   return (await response.json()) as GoogleExportResponse;
 }
 
+export async function deleteAccount(): Promise<void> {
+  await apiFetch("/account/", { method: "DELETE" });
+  await supabase.auth.signOut();
+}
+
 export async function updateSyllabusTimezone(
   syllabusId: string,
   timezone: string

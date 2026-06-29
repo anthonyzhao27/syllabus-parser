@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /upload
+Disallow: /results
+Disallow: /settings
+Disallow: /login
+
+Sitemap: https://syllabuddy-pi.vercel.app/sitemap.xml

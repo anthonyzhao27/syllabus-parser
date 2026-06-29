@@ -38,11 +38,13 @@ class TestFindFirstWeekday:
 
 class TestGenerateWeeklyDates:
     def test_fridays_in_january(self):
-        dates = list(_generate_weekly_dates(
-            start_date=date(2025, 1, 3),
-            end_date=date(2025, 1, 31),
-            weekday=Weekday.FRIDAY,
-        ))
+        dates = list(
+            _generate_weekly_dates(
+                start_date=date(2025, 1, 3),
+                end_date=date(2025, 1, 31),
+                weekday=Weekday.FRIDAY,
+            )
+        )
         assert dates == [
             date(2025, 1, 3),
             date(2025, 1, 10),
@@ -52,12 +54,14 @@ class TestGenerateWeeklyDates:
         ]
 
     def test_biweekly(self):
-        dates = list(_generate_weekly_dates(
-            start_date=date(2025, 1, 3),
-            end_date=date(2025, 2, 28),
-            weekday=Weekday.FRIDAY,
-            interval=2,
-        ))
+        dates = list(
+            _generate_weekly_dates(
+                start_date=date(2025, 1, 3),
+                end_date=date(2025, 2, 28),
+                weekday=Weekday.FRIDAY,
+                interval=2,
+            )
+        )
         assert dates == [
             date(2025, 1, 3),
             date(2025, 1, 17),
@@ -67,12 +71,14 @@ class TestGenerateWeeklyDates:
         ]
 
     def test_with_exclusions(self):
-        dates = list(_generate_weekly_dates(
-            start_date=date(2025, 1, 3),
-            end_date=date(2025, 1, 31),
-            weekday=Weekday.FRIDAY,
-            exclusions={date(2025, 1, 17)},
-        ))
+        dates = list(
+            _generate_weekly_dates(
+                start_date=date(2025, 1, 3),
+                end_date=date(2025, 1, 31),
+                weekday=Weekday.FRIDAY,
+                exclusions={date(2025, 1, 17)},
+            )
+        )
         assert dates == [
             date(2025, 1, 3),
             date(2025, 1, 10),
@@ -81,37 +87,45 @@ class TestGenerateWeeklyDates:
         ]
 
     def test_empty_range_start_after_end(self):
-        dates = list(_generate_weekly_dates(
-            start_date=date(2025, 1, 31),
-            end_date=date(2025, 1, 3),
-            weekday=Weekday.FRIDAY,
-        ))
+        dates = list(
+            _generate_weekly_dates(
+                start_date=date(2025, 1, 31),
+                end_date=date(2025, 1, 3),
+                weekday=Weekday.FRIDAY,
+            )
+        )
         assert dates == []
 
     def test_single_date_excluded(self):
-        dates = list(_generate_weekly_dates(
-            start_date=date(2025, 1, 3),
-            end_date=date(2025, 1, 9),
-            weekday=Weekday.FRIDAY,
-            exclusions={date(2025, 1, 3)},
-        ))
+        dates = list(
+            _generate_weekly_dates(
+                start_date=date(2025, 1, 3),
+                end_date=date(2025, 1, 9),
+                weekday=Weekday.FRIDAY,
+                exclusions={date(2025, 1, 3)},
+            )
+        )
         assert dates == []
 
     def test_start_date_mismatch_raises(self):
         with pytest.raises(ValueError, match="does not match weekday"):
-            list(_generate_weekly_dates(
-                start_date=date(2025, 1, 6),
-                end_date=date(2025, 1, 31),
-                weekday=Weekday.FRIDAY,
-            ))
+            list(
+                _generate_weekly_dates(
+                    start_date=date(2025, 1, 6),
+                    end_date=date(2025, 1, 31),
+                    weekday=Weekday.FRIDAY,
+                )
+            )
 
 
 class TestGenerateDailyDates:
     def test_daily_dates(self):
-        dates = list(_generate_daily_dates(
-            start_date=date(2025, 1, 1),
-            end_date=date(2025, 1, 5),
-        ))
+        dates = list(
+            _generate_daily_dates(
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 1, 5),
+            )
+        )
         assert dates == [
             date(2025, 1, 1),
             date(2025, 1, 2),
@@ -121,11 +135,13 @@ class TestGenerateDailyDates:
         ]
 
     def test_every_other_day(self):
-        dates = list(_generate_daily_dates(
-            start_date=date(2025, 1, 1),
-            end_date=date(2025, 1, 10),
-            interval=2,
-        ))
+        dates = list(
+            _generate_daily_dates(
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 1, 10),
+                interval=2,
+            )
+        )
         assert dates == [
             date(2025, 1, 1),
             date(2025, 1, 3),
@@ -287,11 +303,13 @@ class TestIntervalValidation:
 
 class TestMonthlyDateGeneration:
     def test_monthly_across_year_boundary(self):
-        dates = list(_generate_monthly_dates(
-            start_date=date(2025, 11, 15),
-            end_date=date(2026, 2, 15),
-            interval=1,
-        ))
+        dates = list(
+            _generate_monthly_dates(
+                start_date=date(2025, 11, 15),
+                end_date=date(2026, 2, 15),
+                interval=1,
+            )
+        )
         assert dates == [
             date(2025, 11, 15),
             date(2025, 12, 15),
@@ -300,11 +318,13 @@ class TestMonthlyDateGeneration:
         ]
 
     def test_monthly_day_clamping(self):
-        dates = list(_generate_monthly_dates(
-            start_date=date(2025, 1, 31),
-            end_date=date(2025, 4, 30),
-            interval=1,
-        ))
+        dates = list(
+            _generate_monthly_dates(
+                start_date=date(2025, 1, 31),
+                end_date=date(2025, 4, 30),
+                interval=1,
+            )
+        )
         assert dates == [
             date(2025, 1, 31),
             date(2025, 2, 28),
@@ -313,11 +333,13 @@ class TestMonthlyDateGeneration:
         ]
 
     def test_monthly_day_clamping_leap_year(self):
-        dates = list(_generate_monthly_dates(
-            start_date=date(2024, 1, 31),
-            end_date=date(2024, 3, 31),
-            interval=1,
-        ))
+        dates = list(
+            _generate_monthly_dates(
+                start_date=date(2024, 1, 31),
+                end_date=date(2024, 3, 31),
+                interval=1,
+            )
+        )
         assert dates == [
             date(2024, 1, 31),
             date(2024, 2, 29),

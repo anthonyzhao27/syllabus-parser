@@ -8,11 +8,14 @@ import pytest
 from fastapi import HTTPException
 
 from app.services.extraction import (
+    MAX_PDF_PAGES,
     _extract_docx,
     _extract_pdf,
     _extract_pdf_text,
     _is_image,
     _pdf_pages_to_base64_images,
+    classify_upload,
+    detect_mime,
     extract_text,
     extract_text_from_images,
 )
@@ -169,3 +172,84 @@ def test_is_image_detection() -> None:
     pdf_file.content_type = "application/pdf"
     pdf_file.filename = "syllabus.pdf"
     assert _is_image(pdf_file) is False
+
+
+# ── Magic-byte MIME sniffing ─────────────────────────
+
+
+def _mock_upload(data: bytes, filename: str = "upload"):
+    file = AsyncMock()
+    file.filename = filename
+    file.content_type = None
+
+    async def _read(size: int = -1) -> bytes:
+        return data if size in (-1, None) or size >= len(data) else data[:size]
+
+    file.read = _read
+    file.seek = AsyncMock()
+    return file
+
+
+@pytest.mark.asyncio
+async def test_detect_mime_pdf(generated_pdf_path: Path) -> None:
+    file = _mock_upload(generated_pdf_path.read_bytes(), "syllabus.pdf")
+    assert await detect_mime(file) == "application/pdf"
+
+
+@pytest.mark.asyncio
+async def test_detect_mime_png() -> None:
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+    file = _mock_upload(png, "screen.png")
+    assert await detect_mime(file) == "image/png"
+
+
+@pytest.mark.asyncio
+async def test_detect_mime_rejects_mislabeled_executable() -> None:
+    """A .exe renamed to .pdf must not be accepted as PDF."""
+    file = _mock_upload(b"MZ\x90\x00<bogus>", "evil.pdf")
+    file.content_type = "application/pdf"
+    with pytest.raises(HTTPException) as exc:
+        await detect_mime(file)
+    assert exc.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_classify_upload_rejects_zip_with_wrong_extension() -> None:
+    """ZIP magic bytes but no .docx extension must be rejected."""
+    file = _mock_upload(b"PK\x03\x04stuff", "evil.pdf")
+    with pytest.raises(HTTPException) as exc:
+        await classify_upload(file)
+    assert exc.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_classify_upload_accepts_docx_zip(
+    generated_docx_path: Path,
+) -> None:
+    file = _mock_upload(generated_docx_path.read_bytes(), "syllabus.docx")
+    assert await classify_upload(file) == (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+
+
+# ── PDF-bomb defense ─────────────────────────────────
+
+
+def test_extract_pdf_rejects_over_page_limit() -> None:
+    """A PDF claiming more than MAX_PDF_PAGES pages must be rejected with 413."""
+    fake_doc = MagicMock()
+    fake_doc.__len__ = lambda self: MAX_PDF_PAGES + 1
+    fake_doc.__enter__ = lambda self: fake_doc
+    fake_doc.__exit__ = lambda self, exc_type, exc, tb: None
+
+    with patch("app.services.extraction.fitz.open", return_value=fake_doc):
+        with patch("app.services.extraction.pdfplumber.open") as mock_pdfplumber:
+            mock_pdf = MagicMock()
+            mock_pdf.__enter__ = lambda self: mock_pdf
+            mock_pdf.__exit__ = lambda self, exc_type, exc, tb: None
+            mock_pdf.pages = [MagicMock()] * (MAX_PDF_PAGES + 1)
+            mock_pdfplumber.return_value = mock_pdf
+
+            with pytest.raises(HTTPException) as exc:
+                _extract_pdf_text(b"%PDF-1.4\n" + b"\x00" * 100)
+    assert exc.value.status_code == 413

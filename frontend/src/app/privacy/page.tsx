@@ -98,7 +98,17 @@ export default function PrivacyPolicyPage() {
               <p className="text-warm-500">
                 When you sign in with Google or export to Google Calendar, we request access to create calendar
                 events on your behalf. We do not store your Google access tokens permanently&mdash;they are only
-                used during the export process.
+                used during the export process. Syllabuddy&apos;s use of information received from Google APIs
+                adheres to the{" "}
+                <a
+                  href="https://developers.google.com/terms/api-services-user-data-policy"
+                  className="text-mint-600 transition-colors hover:text-mint-700"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >
+                  Google API Services User Data Policy
+                </a>
+                , including the Limited Use requirements.
               </p>
 
               <h3 className="mb-2 mt-4 font-semibold text-warm-600">OpenAI</h3>
@@ -111,7 +121,8 @@ export default function PrivacyPolicyPage() {
               <h3 className="mb-2 mt-4 font-semibold text-warm-600">Supabase</h3>
               <p className="text-warm-500">
                 We use Supabase for authentication and data storage. Your data is stored securely with
-                row-level security policies ensuring you can only access your own information.
+                row-level security policies ensuring you can only access your own information. Data is
+                hosted in Supabase&apos;s US East (us-east-1) region.
               </p>
             </section>
 
@@ -124,7 +135,10 @@ export default function PrivacyPolicyPage() {
                 <li>Row-level security ensures users can only access their own data</li>
                 <li>Passwords are hashed using industry-standard algorithms</li>
                 <li>All communications use HTTPS encryption</li>
-                <li>Uploaded files are stored in user-specific directories</li>
+                <li>
+                  Uploaded files are stored in Supabase Storage under a per-user
+                  directory protected by row-level security
+                </li>
               </ul>
             </section>
 
@@ -133,9 +147,9 @@ export default function PrivacyPolicyPage() {
                 Data Retention
               </h2>
               <p className="text-warm-500">
-                Your data is retained as long as you maintain an account with us. You may delete individual
-                syllabi and their associated events at any time through the dashboard. If you wish to delete
-                your entire account and all associated data, please contact us.
+                Syllabus files and extracted events persist until you delete them from the dashboard or delete
+                your account. OpenAI processes document text transiently and we do not retain it after
+                extraction is complete. Account deletion is immediate and irreversible.
               </p>
             </section>
 
@@ -147,7 +161,15 @@ export default function PrivacyPolicyPage() {
               <ul className="ml-4 list-disc space-y-1 text-warm-500">
                 <li>Access your personal data</li>
                 <li>Delete your syllabi and extracted events</li>
-                <li>Request deletion of your account</li>
+                <li>
+                  Delete your account and all associated data instantly from the{" "}
+                  <Link
+                    href="/settings"
+                    className="text-mint-600 transition-colors hover:text-mint-700"
+                  >
+                    Settings page
+                  </Link>
+                </li>
                 <li>Export your data</li>
               </ul>
             </section>

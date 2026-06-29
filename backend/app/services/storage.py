@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 BUCKET_NAME = "syllabi"
 MAX_FILE_SIZE = settings.max_file_size_mb * 1024 * 1024
+CHUNK_SIZE = 64 * 1024
 
 
 def _safe_filename(filename: str | None) -> str:
@@ -25,17 +26,19 @@ async def validate_total_upload_size(files: list[UploadFile]) -> None:
     total_size = 0
     for file in files:
         await file.seek(0)
-        total_size += len(await file.read())
+        while chunk := await file.read(CHUNK_SIZE):
+            total_size += len(chunk)
+            if total_size > MAX_FILE_SIZE:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(f"File size exceeds {settings.max_file_size_mb}MB limit"),
+                )
         await file.seek(0)
 
-    if total_size > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File size exceeds {settings.max_file_size_mb}MB limit",
-        )
 
-
-async def upload_file(file: UploadFile, user_id: str, access_token: str) -> dict[str, str | int]:
+async def upload_file(
+    file: UploadFile, user_id: str, access_token: str
+) -> dict[str, str | int]:
     await file.seek(0)
     content = await file.read()
     file_size = len(content)
@@ -91,8 +94,10 @@ async def upload_files(
 
 async def download_file(storage_path: str, access_token: str) -> bytes:
     try:
-        return get_authenticated_client(access_token).storage.from_(BUCKET_NAME).download(
-            storage_path
+        return (
+            get_authenticated_client(access_token)
+            .storage.from_(BUCKET_NAME)
+            .download(storage_path)
         )
     except Exception as exc:
         logger.exception("Failed to download file: %s", storage_path)

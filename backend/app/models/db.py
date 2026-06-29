@@ -19,3 +19,18 @@ def get_authenticated_client(access_token: str) -> Client:
             persist_session=False,
         ),
     )
+
+
+def get_service_role_client() -> Client:
+    """Create a Supabase client with the service-role key. Bypasses RLS."""
+    if not settings.supabase_url or not settings.supabase_service_role_key:
+        raise RuntimeError("Supabase service-role credentials are not configured")
+
+    return create_client(
+        settings.supabase_url,
+        settings.supabase_service_role_key,
+        options=ClientOptions(
+            auto_refresh_token=False,
+            persist_session=False,
+        ),
+    )

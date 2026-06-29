@@ -10,7 +10,7 @@ requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
-    "pymupdf>=1.24",
+    "pymupdf>=1.24.10,<2.0",
     "pdfplumber>=0.11",
     "python-docx>=1.1",
     "twilio>=9.0",
@@ -23,6 +23,8 @@ dependencies = [
     "google-auth>=2.25",
     "python-dateutil>=2.8.0",
     "PyJWT[crypto]>=2.8",
+    "slowapi>=0.1.9",
+    "filetype>=1.2",
 ]
 
 [project.optional-dependencies]

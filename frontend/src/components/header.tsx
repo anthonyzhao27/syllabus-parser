@@ -10,6 +10,7 @@ import {
   ChevronDown,
   FolderOpen,
   LogOut,
+  Settings,
   Upload,
   UserCircle2,
 } from "lucide-react";
@@ -177,11 +178,20 @@ export function Header() {
                       })}
                     </div>
 
+                    <Link
+                      href="/settings"
+                      onClick={() => setMenuOpen(false)}
+                      className="mt-3 flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-warm-600 transition-colors hover:bg-warm-50 hover:text-warm-800"
+                    >
+                      <Settings className="h-4 w-4" />
+                      Settings
+                    </Link>
+
                     <button
                       type="button"
                       onClick={() => void handleSignOut()}
                       disabled={signingOut}
-                      className="mt-3 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-warm-600 transition-colors hover:bg-warm-50 hover:text-warm-800 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-warm-600 transition-colors hover:bg-warm-50 hover:text-warm-800 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <LogOut className="h-4 w-4" />
                       {signingOut ? "Signing out..." : "Sign out"}

@@ -504,29 +504,31 @@ class TestExtractEventsPostProcessing:
 
 class TestParseExtractionResult:
     def test_parses_events_and_recurring_events(self):
-        raw = json.dumps({
-            "events": [
-                {
-                    "title": "Midterm",
-                    "due_date": "2025-02-15T14:00:00",
-                    "event_type": "exam",
-                    "time_specified": True,
-                    "duration_minutes": 120,
-                }
-            ],
-            "recurring_events": [
-                {
-                    "title": "Friday Quiz",
-                    "event_type": "quiz",
-                    "recurrence": {
-                        "frequency": "weekly",
-                        "weekday": "friday",
-                        "start_date": "2025-01-10",
-                        "end_date": "2025-01-24",
-                    },
-                }
-            ],
-        })
+        raw = json.dumps(
+            {
+                "events": [
+                    {
+                        "title": "Midterm",
+                        "due_date": "2025-02-15T14:00:00",
+                        "event_type": "exam",
+                        "time_specified": True,
+                        "duration_minutes": 120,
+                    }
+                ],
+                "recurring_events": [
+                    {
+                        "title": "Friday Quiz",
+                        "event_type": "quiz",
+                        "recurrence": {
+                            "frequency": "weekly",
+                            "weekday": "friday",
+                            "start_date": "2025-01-10",
+                            "end_date": "2025-01-24",
+                        },
+                    }
+                ],
+            }
+        )
 
         result = _parse_extraction_result(raw)
 
@@ -536,28 +538,30 @@ class TestParseExtractionResult:
         assert result.recurring_events[0].title == "Friday Quiz"
 
     def test_skips_malformed_recurring_event(self):
-        raw = json.dumps({
-            "events": [],
-            "recurring_events": [
-                {
-                    "title": "Valid Quiz",
-                    "event_type": "quiz",
-                    "recurrence": {
-                        "frequency": "weekly",
-                        "weekday": "friday",
-                        "start_date": "2025-01-10",
-                        "end_date": "2025-01-24",
+        raw = json.dumps(
+            {
+                "events": [],
+                "recurring_events": [
+                    {
+                        "title": "Valid Quiz",
+                        "event_type": "quiz",
+                        "recurrence": {
+                            "frequency": "weekly",
+                            "weekday": "friday",
+                            "start_date": "2025-01-10",
+                            "end_date": "2025-01-24",
+                        },
                     },
-                },
-                {
-                    "title": "Invalid Quiz",
-                    "event_type": "quiz",
-                    "recurrence": {
-                        "frequency": "weekly",
+                    {
+                        "title": "Invalid Quiz",
+                        "event_type": "quiz",
+                        "recurrence": {
+                            "frequency": "weekly",
+                        },
                     },
-                },
-            ],
-        })
+                ],
+            }
+        )
 
         result = _parse_extraction_result(raw)
 
@@ -570,22 +574,26 @@ class TestExtractEventsWithRecurrence:
     async def test_recurring_event_expanded(self):
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({
-            "events": [],
-            "recurring_events": [{
-                "title": "Friday Quiz",
-                "course": "CS 101",
-                "event_type": "quiz",
-                "recurrence": {
-                    "frequency": "weekly",
-                    "weekday": "friday",
-                    "start_date": "2025-01-10",
-                    "end_date": "2025-01-31",
-                    "time": "10:00:00",
-                    "exclusions": [],
-                },
-            }],
-        })
+        mock_response.choices[0].message.content = json.dumps(
+            {
+                "events": [],
+                "recurring_events": [
+                    {
+                        "title": "Friday Quiz",
+                        "course": "CS 101",
+                        "event_type": "quiz",
+                        "recurrence": {
+                            "frequency": "weekly",
+                            "weekday": "friday",
+                            "start_date": "2025-01-10",
+                            "end_date": "2025-01-31",
+                            "time": "10:00:00",
+                            "exclusions": [],
+                        },
+                    }
+                ],
+            }
+        )
 
         with patch("app.services.llm.AsyncOpenAI") as MockClient:
             instance = AsyncMock()
@@ -606,25 +614,31 @@ class TestExtractEventsWithRecurrence:
     async def test_mixed_events_and_recurring(self):
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({
-            "events": [{
-                "title": "Midterm",
-                "due_date": "2025-02-15T14:00:00",
-                "event_type": "exam",
-                "time_specified": True,
-                "duration_minutes": 120,
-            }],
-            "recurring_events": [{
-                "title": "Quiz",
-                "event_type": "quiz",
-                "recurrence": {
-                    "frequency": "weekly",
-                    "weekday": "friday",
-                    "start_date": "2025-01-10",
-                    "end_date": "2025-01-24",
-                },
-            }],
-        })
+        mock_response.choices[0].message.content = json.dumps(
+            {
+                "events": [
+                    {
+                        "title": "Midterm",
+                        "due_date": "2025-02-15T14:00:00",
+                        "event_type": "exam",
+                        "time_specified": True,
+                        "duration_minutes": 120,
+                    }
+                ],
+                "recurring_events": [
+                    {
+                        "title": "Quiz",
+                        "event_type": "quiz",
+                        "recurrence": {
+                            "frequency": "weekly",
+                            "weekday": "friday",
+                            "start_date": "2025-01-10",
+                            "end_date": "2025-01-24",
+                        },
+                    }
+                ],
+            }
+        )
 
         with patch("app.services.llm.AsyncOpenAI") as MockClient:
             instance = AsyncMock()

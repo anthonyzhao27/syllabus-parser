@@ -1,0 +1,16 @@
+{
+  "name": "Syllabuddy",
+  "short_name": "Syllabuddy",
+  "description": "Extract assignments and due dates from your course syllabi",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FDF8F2",
+  "theme_color": "#4FB286",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "any",
+      "type": "image/png"
+    }
+  ]
+}
