@@ -21,7 +21,23 @@ import { EVENT_TYPES } from "@/types";
 import { getCurrentPath, redirectToLogin } from "./auth-redirect";
 import { getAccessToken, supabase } from "./supabase";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+function resolveApiBase(): string {
+  const configured = process.env.NEXT_PUBLIC_API_URL;
+
+  if (configured) {
+    return configured;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "NEXT_PUBLIC_API_URL is not set. It must be configured in production."
+    );
+  }
+
+  return "http://localhost:8000";
+}
+
+const API_BASE = resolveApiBase();
 
 export class ApiError extends Error {
   status: number;
@@ -389,11 +405,6 @@ export async function exportToGoogleCalendar(
   return (await response.json()) as GoogleExportResponse;
 }
 
-export async function deleteAccount(): Promise<void> {
-  await apiFetch("/account/", { method: "DELETE" });
-  await supabase.auth.signOut();
-}
-
 export async function updateSyllabusTimezone(
   syllabusId: string,
   timezone: string
@@ -407,4 +418,11 @@ export async function updateSyllabusTimezone(
   });
   const data = (await response.json()) as ApiSyllabus;
   return toSavedSyllabus(data);
+}
+
+export async function deleteAccount(): Promise<void> {
+  // Backend returns 204 No Content; cascade + storage purge happen server-side.
+  await apiFetch("/account/", {
+    method: "DELETE",
+  });
 }
