@@ -386,29 +386,43 @@ def test_list_syllabi_forwards_user_token(
 
 
 # ---------------------------------------------------------------------------
-# Invariant 4: app.models.db exposes only the user-token client, and it always
-# attaches the caller's bearer token. No RLS-bypassing service-role client.
+# Invariant 4: the RLS-bypassing service-role client is confined to admin /
+# global paths (account deletion, the global extraction cache). It must NEVER
+# be used on a user-scoped read/write path — those must use the user token.
 # ---------------------------------------------------------------------------
 
 
-def test_db_module_exposes_no_service_role_client() -> None:
-    """Guard against introducing an RLS-bypassing service-role client.
+def test_user_scoped_paths_do_not_use_service_role_client() -> None:
+    """User-scoped data paths must use the authenticated (user-token) client.
 
-    The only client factory must be the authenticated (user-token) one. A new
-    factory built from a service-role/secret key would let callers bypass RLS,
-    so this fails loudly the moment one is added to app.models.db.
+    A service-role client legitimately exists for admin/global operations
+    (account deletion removes the auth user; the extraction cache is a global,
+    by-design cross-user store). But it bypasses RLS, so it must never appear on
+    a user-scoped read/write path. This fails the moment a user-scoped module
+    reaches for the service-role client instead of the caller's token.
     """
-    public_callables = {
-        name
-        for name, obj in vars(db).items()
-        if not name.startswith("_") and callable(obj) and inspect.isfunction(obj)
-    }
-    assert public_callables == {"get_authenticated_client"}
+    # The user-token client factory must exist.
+    assert hasattr(db, "get_authenticated_client")
 
-    source = inspect.getsource(db)
-    forbidden = ("service_role", "service_key", "service-role", "SUPABASE_SERVICE")
-    for token in forbidden:
-        assert token not in source, f"service-role reference {token!r} found in db.py"
+    import app.routers.export as export_router
+    import app.routers.files as files_router
+    import app.routers.parse as parse_router
+
+    user_scoped_modules = [
+        storage_service,
+        syllabi_service,
+        files_router,
+        export_router,
+        parse_router,
+    ]
+    forbidden = ("get_service_role_client", "service_role", "service-role")
+    for mod in user_scoped_modules:
+        source = inspect.getsource(mod)
+        for token in forbidden:
+            assert token not in source, (
+                f"{mod.__name__} references {token!r}; user-scoped paths must "
+                "use the authenticated (user-token) client, not service-role"
+            )
 
 
 def test_authenticated_client_attaches_caller_bearer_token() -> None:
