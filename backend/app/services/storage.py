@@ -131,7 +131,7 @@ async def delete_file(storage_path: str, access_token: str) -> None:
         logger.exception("Failed to delete file: %s", storage_path)
         raise HTTPException(
             status_code=503,
-            detail=f"Failed to delete file from storage: {storage_path}",
+            detail="Failed to delete file from storage. Please try again.",
         ) from exc
 
 
@@ -157,7 +157,7 @@ def _download_files_as_zip_sync(storage_paths: list[str], access_token: str) -> 
                 logger.exception("Failed to download file for zip: %s", path)
                 raise HTTPException(
                     status_code=503,
-                    detail=f"Failed to download file: {path}. Please try again.",
+                    detail="Failed to download a file. Please try again.",
                 ) from exc
 
             filename = path.split("/")[-1] if "/" in path else f"file_{index}"

@@ -20,6 +20,10 @@ app = FastAPI(
     title="Syllabus Parser API",
     version="0.1.0",
     description="API for parsing syllabi and exporting to calendars",
+    # Hide interactive docs + schema in production (no public API surface map).
+    docs_url=None if settings.is_production else "/docs",
+    redoc_url=None if settings.is_production else "/redoc",
+    openapi_url=None if settings.is_production else "/openapi.json",
 )
 
 app.state.limiter = limiter
