@@ -5,7 +5,7 @@ import {
   downloadSyllabusFiles,
   exportToGoogleCalendar,
   getSyllabi,
-  parseSyllabus,
+  saveSyllabus,
   toApiEventUpdate,
 } from "@/lib/api";
 import type { SavedEvent } from "@/types";
@@ -137,17 +137,15 @@ describe("api helpers", () => {
         new Response(
           JSON.stringify({
             syllabus_id: "syllabus-123",
-            events: [],
           }),
           { status: 200 }
         )
       )
     );
 
-    const formData = new FormData();
-    formData.append("files", new File(["content"], "syllabus.pdf"));
-
-    await expect(parseSyllabus(formData)).resolves.toEqual({
+    await expect(
+      saveSyllabus([new File(["content"], "syllabus.pdf")], [])
+    ).resolves.toEqual({
       syllabusId: "syllabus-123",
     });
   });
