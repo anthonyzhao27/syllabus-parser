@@ -21,13 +21,16 @@ def user_or_ip_key(request: Request) -> str:
     return f"ip:{get_remote_address(request)}"
 
 
-# TODO: switch to Redis (storage_uri="redis://...") when scaling beyond one dyno.
-# headers_enabled=False — slowapi would otherwise require a `response: Response`
-# parameter on every limited endpoint.
+# TODO: switch to Redis (storage_uri="redis://...") when scaling beyond
+# one dyno. headers_enabled=False — slowapi would otherwise require a
+# `response: Response` parameter on every limited endpoint.
 limiter = Limiter(key_func=user_or_ip_key, headers_enabled=False)
 
 
-MAX_BODY_BYTES = settings.max_file_size_mb * 1024 * 1024 * 11
+# Uploads are multipart/form-data, so the body is the file plus form-field and
+# MIME boundary overhead. Allow a 1MB margin above the file size limit to cover
+# that overhead without letting the body balloon past the intended ~10MB cap.
+MAX_BODY_BYTES = settings.max_file_size_mb * 1024 * 1024 + 1024 * 1024
 
 
 class BodySizeLimitMiddleware(BaseHTTPMiddleware):
