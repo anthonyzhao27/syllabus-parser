@@ -8,6 +8,8 @@ import pytest
 
 from app.models.schemas import EventType, ParsedEvent
 from app.services.llm import (
+    MAX_PROMPT_CHARS,
+    OPENAI_TIMEOUT_SECONDS,
     _apply_all_smart_defaults,
     _apply_smart_defaults,
     _parse_events,
@@ -654,3 +656,65 @@ class TestExtractEventsWithRecurrence:
 
             quizzes = [e for e in events if "Quiz" in e.title]
             assert len(quizzes) == 3
+
+
+class TestCostAndTimeoutGuards:
+    @pytest.mark.asyncio
+    async def test_oversized_text_is_capped(self) -> None:
+        """Text longer than MAX_PROMPT_CHARS is truncated before sending."""
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = '{"events": []}'
+
+        oversized = "x" * (MAX_PROMPT_CHARS + 5_000)
+
+        with patch("app.services.llm.AsyncOpenAI") as MockClient:
+            instance = AsyncMock()
+            instance.chat.completions.create = AsyncMock(return_value=mock_response)
+            MockClient.return_value = instance
+
+            await extract_events(oversized)
+
+            call_kwargs = instance.chat.completions.create.call_args.kwargs
+            sent_text = call_kwargs["messages"][1]["content"]
+            assert len(sent_text) == MAX_PROMPT_CHARS
+
+    @pytest.mark.asyncio
+    async def test_text_under_cap_not_truncated(self) -> None:
+        """Text within the cap is passed through unchanged."""
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = '{"events": []}'
+
+        text = "Homework 1 due Jan 30."
+
+        with patch("app.services.llm.AsyncOpenAI") as MockClient:
+            instance = AsyncMock()
+            instance.chat.completions.create = AsyncMock(return_value=mock_response)
+            MockClient.return_value = instance
+
+            await extract_events(text)
+
+            call_kwargs = instance.chat.completions.create.call_args.kwargs
+            assert call_kwargs["messages"][1]["content"] == text
+
+    @pytest.mark.asyncio
+    async def test_client_built_with_timeout(self) -> None:
+        """The OpenAI client is constructed with an explicit timeout."""
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = '{"events": []}'
+
+        with patch("app.services.llm.AsyncOpenAI") as MockClient:
+            instance = AsyncMock()
+            instance.chat.completions.create = AsyncMock(return_value=mock_response)
+            MockClient.return_value = instance
+
+            await extract_events("some text")
+
+            timeout = MockClient.call_args.kwargs["timeout"]
+            assert timeout == OPENAI_TIMEOUT_SECONDS
+
+    def test_timeout_is_bounded(self) -> None:
+        """Timeout is well under the SDK's 600s default."""
+        assert 0 < OPENAI_TIMEOUT_SECONDS < 600

@@ -20,6 +20,19 @@ from app.utils.prompts import EXTRACTION_PROMPT
 
 logger = logging.getLogger(__name__)
 
+# Explicit timeout (seconds) for OpenAI calls. The SDK default is 600s, which
+# lets a single hung request tie up a worker for ten minutes. 60s is generous
+# for a JSON extraction completion while still bounding worker exposure.
+OPENAI_TIMEOUT_SECONDS = 60.0
+
+# Hard per-request cap on the syllabus text we send to OpenAI, as a cost guard.
+# Rough estimate: ~4 chars/token for English (OpenAI's own rule of thumb), so
+# 240_000 chars ~= 60k input tokens. The configured gpt-4o-mini model has a
+# 128k context window, so this leaves ample room for the system prompt + the
+# JSON completion while capping the worst-case input bill from a maliciously
+# or accidentally huge upload.
+MAX_PROMPT_CHARS = 240_000
+
 DURATION_PATTERN = re.compile(
     r"^\s*(\d+(?:\.\d+)?)\s*(hours?|hrs?|minutes?|mins?|m|h)\s*$",
     re.IGNORECASE,
@@ -230,7 +243,17 @@ def _parse_extraction_result(raw: str) -> LLMExtractionResult:
 
 async def extract_events(text: str) -> list[ParsedEvent]:
     """Send syllabus text to OpenAI and return structured events."""
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    if len(text) > MAX_PROMPT_CHARS:
+        logger.warning(
+            "Syllabus text of %d chars exceeds cap, truncating to %d chars",
+            len(text),
+            MAX_PROMPT_CHARS,
+        )
+        text = text[:MAX_PROMPT_CHARS]
+
+    client = AsyncOpenAI(
+        api_key=settings.openai_api_key, timeout=OPENAI_TIMEOUT_SECONDS
+    )
 
     response = await client.chat.completions.create(
         model=settings.openai_model,

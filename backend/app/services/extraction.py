@@ -20,6 +20,15 @@ from app.services import extraction_cache
 
 MAX_PDF_PAGES = 100
 PDF_PROCESSING_TIMEOUT_SECONDS = 30
+# Explicit timeout (seconds) for OpenAI vision calls. The SDK default is 600s;
+# bound worker exposure to a hung request. Vision OCR over several high-detail
+# pages is slower than a text completion, so allow more headroom than the text
+# extraction path.
+OPENAI_VISION_TIMEOUT_SECONDS = 120.0
+# Hard cap on screenshots per request, enforced BEFORE any billable vision
+# call. Vision token cost scales with the number of images, so this is the
+# primary cost guard for the screenshot path.
+MAX_SCREENSHOT_IMAGES = 10
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 PDF_MIME = "application/pdf"
 ALLOWED_IMAGE_MIMES = {"image/png", "image/jpeg", "image/webp"}
@@ -94,7 +103,9 @@ def _pdf_pages_to_base64_images(
 
 async def _extract_pdf_via_vision(data: bytes) -> str:
     """Use OpenAI vision to OCR scanned PDF pages."""
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    client = AsyncOpenAI(
+        api_key=settings.openai_api_key, timeout=OPENAI_VISION_TIMEOUT_SECONDS
+    )
 
     images = _pdf_pages_to_base64_images(data)
     if not images:
@@ -188,7 +199,9 @@ def _extract_docx(data: bytes) -> str:
 
 async def _extract_images_via_vision(images_data: list[bytes]) -> str:
     """Use OpenAI vision to extract text from one or more screenshot images."""
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    client = AsyncOpenAI(
+        api_key=settings.openai_api_key, timeout=OPENAI_VISION_TIMEOUT_SECONDS
+    )
 
     content: list[ChatCompletionContentPartParam] = [
         {
@@ -197,7 +210,8 @@ async def _extract_images_via_vision(images_data: list[bytes]) -> str:
                 "These are screenshots of a course syllabus or assignment page. "
                 "Extract ALL text from every image. Return the raw text only, "
                 "preserving structure like tables, dates, and lists. "
-                "Combine text across images into one coherent document. Do not summarize."
+                "Combine text across images into one coherent document. "
+                "Do not summarize."
             ),
         },
     ]
@@ -359,9 +373,10 @@ async def extract_text_from_images(files: list[UploadFile]) -> str:
     if not images_data:
         raise HTTPException(status_code=400, detail="No valid images provided.")
 
-    if len(images_data) > 10:
+    if len(images_data) > MAX_SCREENSHOT_IMAGES:
         raise HTTPException(
-            status_code=400, detail="Maximum 10 screenshots per request."
+            status_code=400,
+            detail=f"Maximum {MAX_SCREENSHOT_IMAGES} screenshots per request.",
         )
 
     content_hash = extraction_cache.compute_hash_multi(images_data)

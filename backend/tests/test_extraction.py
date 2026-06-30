@@ -7,9 +7,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
+from app.config import settings
 from app.services.extraction import (
     MAX_PDF_PAGES,
+    MAX_SCREENSHOT_IMAGES,
+    OPENAI_VISION_TIMEOUT_SECONDS,
     _extract_docx,
+    _extract_images_via_vision,
     _extract_pdf,
     _extract_pdf_text,
     _is_image,
@@ -253,3 +257,65 @@ def test_extract_pdf_rejects_over_page_limit() -> None:
             with pytest.raises(HTTPException) as exc:
                 _extract_pdf_text(b"%PDF-1.4\n" + b"\x00" * 100)
     assert exc.value.status_code == 413
+
+
+# ── Cost & timeout guards ────────────────────────────
+
+
+def test_pdf_page_cap_enforced_before_vision() -> None:
+    """Pages beyond the vision cap are dropped before any vision call."""
+    import fitz
+
+    cap = settings.vision_max_pages
+    doc = fitz.open()
+    for _ in range(cap + 5):
+        page = doc.new_page()
+        page.draw_rect(fitz.Rect(10, 10, 20, 20), color=(0, 0, 0))
+    data = doc.tobytes()
+    doc.close()
+
+    images = _pdf_pages_to_base64_images(data)
+    assert len(images) == cap
+
+
+@pytest.mark.asyncio
+async def test_screenshot_cap_rejected_before_vision() -> None:
+    """Too many screenshots is rejected without ever calling the vision API."""
+    files = []
+    for _ in range(MAX_SCREENSHOT_IMAGES + 1):
+        f = AsyncMock()
+        f.read = AsyncMock(return_value=b"\x89PNG" + b"\x00" * 10)
+        files.append(f)
+
+    with patch("app.services.extraction.AsyncOpenAI") as MockClient:
+        with pytest.raises(HTTPException) as exc:
+            await extract_text_from_images(files)
+
+    assert exc.value.status_code == 400
+    assert str(MAX_SCREENSHOT_IMAGES) in exc.value.detail
+    MockClient.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_vision_client_built_with_timeout() -> None:
+    """The vision OpenAI client is constructed with an explicit timeout."""
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = "Quiz 1 due Feb 14"
+
+    fake_png = b"\x89PNG" + b"\x00" * 50
+
+    with patch("app.services.extraction.AsyncOpenAI") as MockClient:
+        instance = AsyncMock()
+        instance.chat.completions.create = AsyncMock(return_value=mock_response)
+        MockClient.return_value = instance
+
+        await _extract_images_via_vision([fake_png])
+
+        timeout = MockClient.call_args.kwargs["timeout"]
+        assert timeout == OPENAI_VISION_TIMEOUT_SECONDS
+
+
+def test_vision_timeout_is_bounded() -> None:
+    """Vision timeout is well under the SDK's 600s default."""
+    assert 0 < OPENAI_VISION_TIMEOUT_SECONDS < 600
