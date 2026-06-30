@@ -10,6 +10,10 @@ declare global {
               access_token?: string;
               error?: string;
             }) => void;
+            error_callback?: (error: {
+              type?: string;
+              message?: string;
+            }) => void;
           }): {
             requestAccessToken(): void;
           };
