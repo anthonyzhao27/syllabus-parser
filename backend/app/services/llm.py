@@ -263,6 +263,7 @@ async def extract_events(text: str) -> list[ParsedEvent]:
         ],
         response_format={"type": "json_object"},
         temperature=0.0,
+        max_tokens=4096,
     )
 
     raw = response.choices[0].message.content or ""

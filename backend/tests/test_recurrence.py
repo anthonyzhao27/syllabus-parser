@@ -13,6 +13,7 @@ from app.models.schemas import (
     Weekday,
 )
 from app.services.recurrence import (
+    MAX_OCCURRENCES,
     _find_first_weekday,
     _generate_daily_dates,
     _generate_monthly_dates,
@@ -406,3 +407,22 @@ class TestExpandAllRecurrences:
 
         assert len(events) == 2
         assert all("Valid" in e.title for e in events)
+
+
+class TestExpansionCap:
+    def test_daily_over_huge_range_is_capped(self):
+        # A (possibly injected) daily recurrence across decades must not expand
+        # unbounded; it is capped at MAX_OCCURRENCES.
+        recurring = RecurringEvent(
+            title="Daily DoS",
+            event_type=EventType.OTHER,
+            recurrence=Recurrence(
+                frequency=RecurrenceFrequency.DAILY,
+                start_date=date(2020, 1, 1),
+                end_date=date(2099, 12, 31),
+            ),
+        )
+
+        events = expand_recurrence(recurring)
+
+        assert len(events) == MAX_OCCURRENCES

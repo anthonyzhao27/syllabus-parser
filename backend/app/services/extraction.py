@@ -4,7 +4,7 @@ import asyncio
 import base64
 import io
 from collections.abc import Awaitable, Callable
-from zipfile import BadZipFile
+from zipfile import BadZipFile, ZipFile
 
 import filetype
 import fitz
@@ -20,6 +20,12 @@ from app.services import extraction_cache
 
 MAX_PDF_PAGES = 100
 PDF_PROCESSING_TIMEOUT_SECONDS = 30
+# Cap a rasterized PDF page at ~25 megapixels so a maliciously huge MediaBox
+# cannot exhaust memory during vision rendering (page.get_pixmap).
+MAX_RENDER_PIXELS = 25_000_000
+# Reject DOCX whose total uncompressed size exceeds this, to stop zip bombs
+# (python-docx would otherwise decompress the whole archive into memory).
+MAX_DOCX_UNCOMPRESSED_BYTES = 200 * 1024 * 1024
 # Explicit timeout (seconds) for OpenAI vision calls. The SDK default is 600s;
 # bound worker exposure to a hung request. Vision OCR over several high-detail
 # pages is slower than a text completion, so allow more headroom than the text
@@ -94,7 +100,14 @@ def _pdf_pages_to_base64_images(
     with fitz.open(stream=data, filetype="pdf") as doc:
         for i in range(min(len(doc), max_pages)):
             page = doc[i]
-            mat = fitz.Matrix(dpi / 72, dpi / 72)
+            zoom = dpi / 72
+            # Clamp the render so a maliciously huge MediaBox cannot blow up
+            # memory: cap the rasterized page at MAX_RENDER_PIXELS.
+            rect = page.rect
+            est_px = (rect.width * zoom) * (rect.height * zoom)
+            if est_px > MAX_RENDER_PIXELS:
+                zoom *= (MAX_RENDER_PIXELS / est_px) ** 0.5
+            mat = fitz.Matrix(zoom, zoom)
             pix = page.get_pixmap(matrix=mat)
             img_bytes = pix.tobytes("png")
             images.append(base64.b64encode(img_bytes).decode("utf-8"))
@@ -177,6 +190,17 @@ async def _extract_pdf(data: bytes) -> str:
 
 def _extract_docx(data: bytes) -> str:
     """Extract text from DOCX bytes."""
+    try:
+        with ZipFile(io.BytesIO(data)) as archive:
+            total_uncompressed = sum(info.file_size for info in archive.infolist())
+        if total_uncompressed > MAX_DOCX_UNCOMPRESSED_BYTES:
+            raise HTTPException(
+                status_code=422,
+                detail="DOCX file is too large to process.",
+            )
+    except BadZipFile:
+        raise HTTPException(status_code=422, detail="DOCX file appears to be corrupt.")
+
     try:
         doc = Document(io.BytesIO(data))
     except BadZipFile:

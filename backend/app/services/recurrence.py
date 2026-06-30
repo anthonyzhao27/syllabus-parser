@@ -3,6 +3,7 @@
 import logging
 from datetime import date, datetime, timedelta
 from datetime import time as dt_time
+from itertools import islice
 from typing import Generator
 
 from dateutil.relativedelta import relativedelta
@@ -15,6 +16,11 @@ from app.models.schemas import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Hard cap on occurrences expanded from a single recurring event. Bounds memory
+# / CPU if a (possibly injected) recurrence spans an absurd date range; a real
+# course recurrence never approaches this.
+MAX_OCCURRENCES = 1000
 
 WEEKDAY_MAP: dict[Weekday, int] = {
     Weekday.MONDAY: 0,
@@ -96,22 +102,31 @@ def expand_recurrence(recurring: RecurringEvent) -> list[ParsedEvent]:
 
     if rec.frequency == RecurrenceFrequency.DAILY:
         dates = list(
-            _generate_daily_dates(
-                rec.start_date, rec.end_date, rec.interval, exclusions
+            islice(
+                _generate_daily_dates(
+                    rec.start_date, rec.end_date, rec.interval, exclusions
+                ),
+                MAX_OCCURRENCES,
             )
         )
     elif rec.frequency == RecurrenceFrequency.WEEKLY:
         if rec.weekday is None:
             raise ValueError("Weekly recurrence requires weekday, got None")
         dates = list(
-            _generate_weekly_dates(
-                rec.start_date, rec.end_date, rec.weekday, rec.interval, exclusions
+            islice(
+                _generate_weekly_dates(
+                    rec.start_date, rec.end_date, rec.weekday, rec.interval, exclusions
+                ),
+                MAX_OCCURRENCES,
             )
         )
     elif rec.frequency == RecurrenceFrequency.MONTHLY:
         dates = list(
-            _generate_monthly_dates(
-                rec.start_date, rec.end_date, rec.interval, exclusions
+            islice(
+                _generate_monthly_dates(
+                    rec.start_date, rec.end_date, rec.interval, exclusions
+                ),
+                MAX_OCCURRENCES,
             )
         )
     else:

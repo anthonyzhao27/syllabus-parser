@@ -44,6 +44,18 @@ def test_extract_docx(generated_docx_path: Path) -> None:
     assert "Quiz 1" in text
 
 
+def test_extract_docx_rejects_zip_bomb(
+    generated_docx_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # When the total uncompressed size exceeds the cap, the DOCX is rejected
+    # before python-docx decompresses it into memory (zip-bomb guard).
+    monkeypatch.setattr("app.services.extraction.MAX_DOCX_UNCOMPRESSED_BYTES", 10)
+    data = generated_docx_path.read_bytes()
+    with pytest.raises(HTTPException) as exc:
+        _extract_docx(data)
+    assert exc.value.status_code == 422
+
+
 # ── Dispatcher ───────────────────────────────────────
 
 
