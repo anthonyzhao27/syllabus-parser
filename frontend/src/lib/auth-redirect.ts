@@ -1,14 +1,14 @@
 export function getSafeNext(next: string | null | undefined): string {
   if (!next) {
-    return "/dashboard";
+    return "/";
   }
 
   if (!next.startsWith("/")) {
-    return "/dashboard";
+    return "/";
   }
 
   if (next.startsWith("//")) {
-    return "/dashboard";
+    return "/";
   }
 
   return next;
