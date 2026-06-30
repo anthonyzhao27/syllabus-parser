@@ -40,8 +40,13 @@ function ResultsLoading() {
 function ResultsContent() {
   const router = useRouter();
   const { data, clear } = useParsedData();
-  const [events, setEvents] = useState<ParsedEvent[]>([]);
-  const [syllabusName, setSyllabusName] = useState("");
+  const [events, setEvents] = useState<ParsedEvent[]>(() => data?.events ?? []);
+  const [syllabusName, setSyllabusName] = useState(() =>
+    data
+      ? data.syllabusName ||
+        (data.files[0]?.name ?? `Syllabus - ${data.courseCode || "Unknown"}`)
+      : ""
+  );
   const [timezone, setTimezone] = useState(getDefaultTimezone);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,18 +54,9 @@ function ResultsContent() {
   const isNavigatingAway = useRef(false);
 
   useEffect(() => {
-    if (!data) {
-      if (!isNavigatingAway.current) {
-        router.replace("/upload");
-      }
-      return;
+    if (!data && !isNavigatingAway.current) {
+      router.replace("/upload");
     }
-
-    setEvents(data.events);
-    setSyllabusName(
-      data.syllabusName ||
-        (data.files[0]?.name ?? `Syllabus - ${data.courseCode || "Unknown"}`)
-    );
   }, [data, router]);
 
   function handleUpdateEvent(index: number, updated: ParsedEvent) {
