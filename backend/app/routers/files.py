@@ -198,7 +198,10 @@ def _normalize_due_date_update(
         ) != time(23, 59):
             raise HTTPException(
                 status_code=422,
-                detail="time_specified=false requires a date-only value or a 23:59 datetime",
+                detail=(
+                    "time_specified=false requires a date-only value or a "
+                    "23:59 datetime"
+                ),
             )
         return due_date_value.isoformat(), (
             explicit_time_specified if explicit_time_specified is not None else True

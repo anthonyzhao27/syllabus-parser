@@ -9,7 +9,6 @@ from dateutil.relativedelta import relativedelta
 
 from app.models.schemas import (
     ParsedEvent,
-    Recurrence,
     RecurrenceFrequency,
     RecurringEvent,
     Weekday,

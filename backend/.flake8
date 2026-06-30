@@ -1,0 +1,9 @@
+[flake8]
+# Match Black's line length (pyproject.toml: line-length = 88).
+max-line-length = 88
+# E203 (whitespace before ':') and W503 (line break before binary operator)
+# conflict with Black's formatting; both are Black-recommended ignores.
+extend-ignore = E203, W503
+per-file-ignores =
+    # Long prompt templates are intentionally kept as single readable lines.
+    app/utils/prompts.py: E501
