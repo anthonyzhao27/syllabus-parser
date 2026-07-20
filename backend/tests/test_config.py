@@ -12,7 +12,6 @@ def _production_kwargs(**overrides):
         "openai_api_key": "sk-test",
         "supabase_url": "https://example.supabase.co",
         "supabase_anon_key": "anon-key",
-        "supabase_service_role_key": "service-key",
         "allowed_origins": "https://syllabuddy.example.com",
     }
     base.update(overrides)
@@ -25,7 +24,6 @@ def test_development_tolerates_empty_secrets():
 
     assert settings.openai_api_key == ""
     assert settings.supabase_url == ""
-    assert settings.supabase_service_role_key == ""
     assert settings.allowed_origins == DEFAULT_ALLOWED_ORIGINS
     assert settings.is_production is False
 
@@ -36,7 +34,6 @@ def test_development_tolerates_empty_secrets():
         "openai_api_key",
         "supabase_url",
         "supabase_anon_key",
-        "supabase_service_role_key",
     ],
 )
 def test_production_missing_secret_raises(missing_field):

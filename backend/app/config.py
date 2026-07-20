@@ -13,7 +13,6 @@ _REQUIRED_SECRETS = (
     "openai_api_key",
     "supabase_url",
     "supabase_anon_key",
-    "supabase_service_role_key",
 )
 
 
@@ -28,7 +27,6 @@ class Settings(BaseSettings):
     extraction_cache_enabled: bool = True
     supabase_url: str = ""
     supabase_anon_key: str = ""
-    supabase_service_role_key: str = ""
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""
     twilio_from_number: str = ""

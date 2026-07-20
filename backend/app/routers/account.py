@@ -7,7 +7,7 @@ from fastapi.concurrency import run_in_threadpool
 
 from app.middleware.auth import AuthenticatedUser, get_current_user
 from app.middleware.limiter import limiter
-from app.models.db import get_authenticated_client, get_service_role_client
+from app.models.db import get_authenticated_client
 
 logger = logging.getLogger(__name__)
 
@@ -84,9 +84,14 @@ def _remove_storage_objects_sync(user_id: str, access_token: str) -> None:
         )
 
 
-def _delete_auth_user_sync(user_id: str) -> None:
-    client = get_service_role_client()
-    client.auth.admin.delete_user(user_id)
+def _delete_current_user_sync(access_token: str) -> None:
+    """Delete the caller's own auth user via a SECURITY DEFINER RPC.
+
+    Uses the caller's token (not a service-role key); the DB function acts on
+    auth.uid() and cascades to the user's rows.
+    """
+    client = get_authenticated_client(access_token)
+    client.rpc("delete_current_user", {}).execute()
 
 
 @router.delete("/", status_code=204)
@@ -118,7 +123,7 @@ async def delete_account(
         ) from exc
 
     try:
-        await run_in_threadpool(_delete_auth_user_sync, user.id)
+        await run_in_threadpool(_delete_current_user_sync, user.access_token)
     except Exception as exc:
         logger.exception("Failed to delete auth user %s", user.id)
         raise HTTPException(

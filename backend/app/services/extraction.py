@@ -337,7 +337,9 @@ def _is_image(file: UploadFile) -> bool:
     return False
 
 
-async def extract_text(file: UploadFile, mime: str | None = None) -> str:
+async def extract_text(
+    file: UploadFile, access_token: str, mime: str | None = None
+) -> str:
     """Extract plain text from a single uploaded document."""
     if mime is None:
         mime = await detect_mime(file)
@@ -345,7 +347,7 @@ async def extract_text(file: UploadFile, mime: str | None = None) -> str:
     data = await file.read()
     content_hash = extraction_cache.compute_hash(data)
 
-    cached = await extraction_cache.get_cached(content_hash)
+    cached = await extraction_cache.get_cached(content_hash, access_token)
     if cached is not None:
         return cached
 
@@ -380,12 +382,13 @@ async def extract_text(file: UploadFile, mime: str | None = None) -> str:
         vision_model=settings.vision_model,
         vision_used=(mime == PDF_MIME),
         byte_size=len(data),
+        access_token=access_token,
     )
 
     return text
 
 
-async def extract_text_from_images(files: list[UploadFile]) -> str:
+async def extract_text_from_images(files: list[UploadFile], access_token: str) -> str:
     """Extract text from multiple screenshot images via LLM vision."""
     images_data: list[bytes] = []
     for f in files:
@@ -404,7 +407,7 @@ async def extract_text_from_images(files: list[UploadFile]) -> str:
         )
 
     content_hash = extraction_cache.compute_hash_multi(images_data)
-    cached = await extraction_cache.get_cached(content_hash)
+    cached = await extraction_cache.get_cached(content_hash, access_token)
     if cached is not None:
         return cached
 
@@ -422,6 +425,7 @@ async def extract_text_from_images(files: list[UploadFile]) -> str:
         vision_model=settings.vision_model,
         vision_used=True,
         byte_size=sum(len(b) for b in images_data),
+        access_token=access_token,
     )
 
     return text

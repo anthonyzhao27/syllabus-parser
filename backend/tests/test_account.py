@@ -3,6 +3,9 @@
 The critical invariant under test: storage objects (which hold user PII)
 are fully purged *before* the auth user is deleted, and a storage failure
 aborts the deletion so it stays retryable instead of orphaning files.
+
+Deletion now runs through the ``delete_current_user`` SECURITY DEFINER RPC
+using the caller's own token — no service-role key in the backend.
 """
 
 from unittest.mock import MagicMock, patch
@@ -65,17 +68,14 @@ def test_delete_account_requires_auth(api_client: TestClient) -> None:
     assert response.status_code == 401
 
 
-@patch("app.routers.account.get_service_role_client")
 @patch("app.routers.account.get_authenticated_client")
 def test_delete_account_purges_storage_then_deletes_auth_user(
     mock_get_auth_client: MagicMock,
-    mock_get_service_client: MagicMock,
     authenticated_client: TestClient,
 ) -> None:
     bucket = FakeBucket({USER_ID: [_file("syllabus-1.pdf"), _file("syllabus-2.pdf")]})
-    mock_get_auth_client.return_value = _make_client(bucket)
-    service_client = MagicMock()
-    mock_get_service_client.return_value = service_client
+    client = _make_client(bucket)
+    mock_get_auth_client.return_value = client
 
     response = authenticated_client.delete("/account/")
 
@@ -84,35 +84,32 @@ def test_delete_account_purges_storage_then_deletes_auth_user(
         f"{USER_ID}/syllabus-1.pdf",
         f"{USER_ID}/syllabus-2.pdf",
     ]
-    service_client.auth.admin.delete_user.assert_called_once_with(USER_ID)
+    # Auth user removed via the RPC (caller's token), not a service-role admin call.
+    client.rpc.assert_called_once_with("delete_current_user", {})
+    client.rpc.return_value.execute.assert_called_once()
 
 
-@patch("app.routers.account.get_service_role_client")
 @patch("app.routers.account.get_authenticated_client")
 def test_storage_failure_aborts_auth_user_deletion(
     mock_get_auth_client: MagicMock,
-    mock_get_service_client: MagicMock,
     authenticated_client: TestClient,
 ) -> None:
     bucket = MagicMock()
     bucket.list.side_effect = RuntimeError("storage offline")
-    mock_get_auth_client.return_value = _make_client(bucket)
-    service_client = MagicMock()
-    mock_get_service_client.return_value = service_client
+    client = _make_client(bucket)
+    mock_get_auth_client.return_value = client
 
     response = authenticated_client.delete("/account/")
 
     # Storage purge failed -> we must NOT delete the auth user, and surface a
     # 500 so the client can retry.
     assert response.status_code == 500
-    service_client.auth.admin.delete_user.assert_not_called()
+    client.rpc.assert_not_called()
 
 
-@patch("app.routers.account.get_service_role_client")
 @patch("app.routers.account.get_authenticated_client")
 def test_incomplete_purge_aborts_auth_user_deletion(
     mock_get_auth_client: MagicMock,
-    mock_get_service_client: MagicMock,
     authenticated_client: TestClient,
 ) -> None:
     # remove() is a no-op here, so objects remain after the purge attempt; the
@@ -120,28 +117,24 @@ def test_incomplete_purge_aborts_auth_user_deletion(
     bucket = MagicMock()
     bucket.list.return_value = [_file("leftover.pdf")]
     bucket.remove.return_value = None
-    mock_get_auth_client.return_value = _make_client(bucket)
-    service_client = MagicMock()
-    mock_get_service_client.return_value = service_client
+    client = _make_client(bucket)
+    mock_get_auth_client.return_value = client
 
     response = authenticated_client.delete("/account/")
 
     assert response.status_code == 500
-    service_client.auth.admin.delete_user.assert_not_called()
+    client.rpc.assert_not_called()
 
 
-@patch("app.routers.account.get_service_role_client")
 @patch("app.routers.account.get_authenticated_client")
 def test_pagination_collects_more_than_one_page(
     mock_get_auth_client: MagicMock,
-    mock_get_service_client: MagicMock,
     authenticated_client: TestClient,
 ) -> None:
     # 250 objects > the 100-object page cap that the old buggy code stopped at.
     files = [_file(f"file-{i}.pdf") for i in range(250)]
     bucket = FakeBucket({USER_ID: files}, page_size=100)
     mock_get_auth_client.return_value = _make_client(bucket)
-    mock_get_service_client.return_value = MagicMock()
 
     response = authenticated_client.delete("/account/")
 
@@ -151,11 +144,9 @@ def test_pagination_collects_more_than_one_page(
     assert f"{USER_ID}/file-249.pdf" in bucket.removed
 
 
-@patch("app.routers.account.get_service_role_client")
 @patch("app.routers.account.get_authenticated_client")
 def test_pagination_recurses_into_nested_folders(
     mock_get_auth_client: MagicMock,
-    mock_get_service_client: MagicMock,
     authenticated_client: TestClient,
 ) -> None:
     bucket = FakeBucket(
@@ -165,7 +156,6 @@ def test_pagination_recurses_into_nested_folders(
         }
     )
     mock_get_auth_client.return_value = _make_client(bucket)
-    mock_get_service_client.return_value = MagicMock()
 
     response = authenticated_client.delete("/account/")
 

@@ -45,7 +45,7 @@ async def parse_syllabus(
                     status_code=400,
                     detail=("When uploading screenshots, all files must be images."),
                 )
-        text = await extract_text_from_images(files)
+        text = await extract_text_from_images(files, user.access_token)
     else:
         if len(files) > 1:
             raise HTTPException(
@@ -55,7 +55,7 @@ async def parse_syllabus(
                     "For multiple images, use screenshots."
                 ),
             )
-        text = await extract_text(files[0], mime=first_kind)
+        text = await extract_text(files[0], user.access_token, mime=first_kind)
 
     try:
         events = await extract_events(text)

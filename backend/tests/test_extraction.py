@@ -66,7 +66,7 @@ async def test_extract_text_pdf(generated_pdf_path: Path) -> None:
     file.filename = "syllabus.pdf"
     file.read = AsyncMock(return_value=generated_pdf_path.read_bytes())
 
-    text = await extract_text(file)
+    text = await extract_text(file, "test-token")
     assert "Homework 1" in text
 
 
@@ -78,7 +78,7 @@ async def test_extract_text_unsupported() -> None:
     file.read = AsyncMock(return_value=b"fake")
 
     with pytest.raises(HTTPException) as exc:
-        await extract_text(file)
+        await extract_text(file, "test-token")
     assert exc.value.status_code == 400
 
 
@@ -153,7 +153,7 @@ async def test_extract_text_from_images() -> None:
         instance.chat.completions.create = AsyncMock(return_value=mock_response)
         MockClient.return_value = instance
 
-        text = await extract_text_from_images([file1, file2])
+        text = await extract_text_from_images([file1, file2], "test-token")
         assert "Quiz 1" in text
 
         call_args = instance.chat.completions.create.call_args
@@ -172,7 +172,7 @@ async def test_extract_text_from_images_too_many() -> None:
         files.append(f)
 
     with pytest.raises(HTTPException) as exc:
-        await extract_text_from_images(files)
+        await extract_text_from_images(files, "test-token")
     assert exc.value.status_code == 400
     assert "10" in exc.value.detail
 
@@ -301,7 +301,7 @@ async def test_screenshot_cap_rejected_before_vision() -> None:
 
     with patch("app.services.extraction.AsyncOpenAI") as MockClient:
         with pytest.raises(HTTPException) as exc:
-            await extract_text_from_images(files)
+            await extract_text_from_images(files, "test-token")
 
     assert exc.value.status_code == 400
     assert str(MAX_SCREENSHOT_IMAGES) in exc.value.detail
