@@ -1,8 +1,9 @@
 """Content-hash cache for extracted text.
 
 Runs under the caller's authenticated (user-token) client + RLS — no
-service-role key. The cache is global/shared across users; the key is
-sha256(file bytes), so a lookup only succeeds for a file you already possess.
+service-role key. The cache is PER-USER (every row is scoped to auth.uid() via
+RLS + a user_id column defaulted to auth.uid()), so one user can never read or
+tamper with another user's cached extraction. The key is sha256(file bytes).
 """
 
 import hashlib
@@ -73,7 +74,7 @@ def _upsert_sync(
             "vision_used": vision_used,
             "byte_size": byte_size,
         },
-        on_conflict="content_hash",
+        on_conflict="user_id,content_hash",
         ignore_duplicates=True,
     ).execute()
 
