@@ -1,4 +1,9 @@
-"""Google Calendar API integration."""
+"""Google Calendar API integration.
+
+Security note: never log the OAuth `access_token` and never stringify
+`googleapiclient.errors.HttpError` into a user-facing response — the error's
+__str__ may include the request URL with sensitive query parameters.
+"""
 
 import logging
 from datetime import timedelta
@@ -194,8 +199,8 @@ def export_to_google_calendar_sync(
         target_calendar_id = _get_or_create_calendar(
             service, calendar_name, course_code, timezone
         )
-    except HttpError as e:
-        logger.error(f"Failed to get/create calendar '{calendar_name}': {e}")
+    except HttpError:
+        logger.exception("Failed to get/create calendar '%s'", calendar_name)
         raise
 
     for event in events:
@@ -215,11 +220,15 @@ def export_to_google_calendar_sync(
             )
             logger.info(f"Created event '{event.title}' in calendar '{calendar_name}'")
         except HttpError as e:
-            logger.error(f"Failed to create event '{event.title}': {e}")
+            logger.exception(
+                "Failed to create event '%s' (status=%s)",
+                event.title,
+                getattr(e.resp, "status", "?"),
+            )
             errors.append(
                 {
                     "title": event.title,
-                    "error": str(e),
+                    "error": "Google Calendar rejected this event.",
                 }
             )
 

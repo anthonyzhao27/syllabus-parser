@@ -135,7 +135,6 @@ describe("SyllabusDetailPage", () => {
 
   it("persists event edits and deletes from the canonical detail page", async () => {
     const user = userEvent.setup();
-    const confirmMock = vi.spyOn(window, "confirm").mockReturnValue(true);
 
     render(<SyllabusDetailPage />);
 
@@ -144,7 +143,8 @@ describe("SyllabusDetailPage", () => {
     await user.click(screen.getByTitle("Edit"));
     await user.clear(screen.getByDisplayValue("Midterm"));
     await user.type(screen.getByDisplayValue(""), "Updated midterm");
-    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    const saveButtons = screen.getAllByRole("button", { name: /^save$/i });
+    await user.click(saveButtons[saveButtons.length - 1]);
 
     await waitFor(() => {
       expect(mockUpdateEvent).toHaveBeenCalled();
@@ -154,8 +154,15 @@ describe("SyllabusDetailPage", () => {
 
     await user.click(screen.getByTitle("Delete"));
 
+    // ConfirmDialog is a custom modal — click the confirm Delete button inside it.
+    // The dialog button has the text "Delete" and is in the portal (last in DOM).
     await waitFor(() => {
-      expect(confirmMock).toHaveBeenCalled();
+      const deleteButtons = screen.getAllByRole("button", { name: /^delete$/i });
+      // The dialog's confirm button is the last one rendered (in the body portal)
+      void user.click(deleteButtons[deleteButtons.length - 1]);
+    });
+
+    await waitFor(() => {
       expect(mockDeleteEvent).toHaveBeenCalledWith("syllabus-1", "event-1");
     });
   });

@@ -8,8 +8,16 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.middleware.auth import AuthenticatedUser, get_current_user
+from app.middleware.limiter import limiter
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter() -> Generator[None, None, None]:
+    limiter.reset()
+    yield
+    limiter.reset()
 
 
 @pytest.fixture(scope="session")

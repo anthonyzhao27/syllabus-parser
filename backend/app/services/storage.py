@@ -5,6 +5,7 @@ import zipfile
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 
 from app.config import settings
 from app.models.db import get_authenticated_client
@@ -21,6 +22,30 @@ def _safe_filename(filename: str | None) -> str:
     return filename.rsplit("/", 1)[-1].rsplit("\\", 1)[-1].replace(" ", "_")
 
 
+def _upload_sync(
+    storage_path: str, content: bytes, content_type: str, access_token: str
+) -> None:
+    get_authenticated_client(access_token).storage.from_(BUCKET_NAME).upload(
+        path=storage_path,
+        file=content,
+        file_options={"content-type": content_type},
+    )
+
+
+def _download_sync(storage_path: str, access_token: str) -> bytes:
+    return (
+        get_authenticated_client(access_token)
+        .storage.from_(BUCKET_NAME)
+        .download(storage_path)
+    )
+
+
+def _remove_sync(storage_path: str, access_token: str) -> None:
+    get_authenticated_client(access_token).storage.from_(BUCKET_NAME).remove(
+        [storage_path]
+    )
+
+
 async def validate_total_upload_size(files: list[UploadFile]) -> None:
     total_size = 0
     for file in files:
@@ -35,7 +60,9 @@ async def validate_total_upload_size(files: list[UploadFile]) -> None:
         )
 
 
-async def upload_file(file: UploadFile, user_id: str, access_token: str) -> dict[str, str | int]:
+async def upload_file(
+    file: UploadFile, user_id: str, access_token: str
+) -> dict[str, str | int]:
     await file.seek(0)
     content = await file.read()
     file_size = len(content)
@@ -54,12 +81,12 @@ async def upload_file(file: UploadFile, user_id: str, access_token: str) -> dict
     )
 
     try:
-        get_authenticated_client(access_token).storage.from_(BUCKET_NAME).upload(
-            path=storage_path,
-            file=content,
-            file_options={
-                "content-type": file.content_type or "application/octet-stream"
-            },
+        await run_in_threadpool(
+            _upload_sync,
+            storage_path,
+            content,
+            file.content_type or "application/octet-stream",
+            access_token,
         )
     except Exception as exc:
         logger.exception("Failed to upload file to storage")
@@ -91,9 +118,7 @@ async def upload_files(
 
 async def download_file(storage_path: str, access_token: str) -> bytes:
     try:
-        return get_authenticated_client(access_token).storage.from_(BUCKET_NAME).download(
-            storage_path
-        )
+        return await run_in_threadpool(_download_sync, storage_path, access_token)
     except Exception as exc:
         logger.exception("Failed to download file: %s", storage_path)
         raise HTTPException(status_code=404, detail="File not found") from exc
@@ -101,22 +126,18 @@ async def download_file(storage_path: str, access_token: str) -> bytes:
 
 async def delete_file(storage_path: str, access_token: str) -> None:
     try:
-        get_authenticated_client(access_token).storage.from_(BUCKET_NAME).remove(
-            [storage_path]
-        )
+        await run_in_threadpool(_remove_sync, storage_path, access_token)
     except Exception as exc:
         logger.exception("Failed to delete file: %s", storage_path)
         raise HTTPException(
             status_code=503,
-            detail=f"Failed to delete file from storage: {storage_path}",
+            detail="Failed to delete file from storage. Please try again.",
         ) from exc
 
 
 async def delete_file_best_effort(storage_path: str, access_token: str) -> bool:
     try:
-        get_authenticated_client(access_token).storage.from_(BUCKET_NAME).remove(
-            [storage_path]
-        )
+        await run_in_threadpool(_remove_sync, storage_path, access_token)
     except Exception:
         logger.warning("Best-effort delete failed: %s", storage_path)
         return False
@@ -124,7 +145,7 @@ async def delete_file_best_effort(storage_path: str, access_token: str) -> bool:
     return True
 
 
-async def download_files_as_zip(storage_paths: list[str], access_token: str) -> bytes:
+def _download_files_as_zip_sync(storage_paths: list[str], access_token: str) -> bytes:
     zip_buffer = io.BytesIO()
     client = get_authenticated_client(access_token)
 
@@ -136,7 +157,7 @@ async def download_files_as_zip(storage_paths: list[str], access_token: str) -> 
                 logger.exception("Failed to download file for zip: %s", path)
                 raise HTTPException(
                     status_code=503,
-                    detail=f"Failed to download file: {path}. Please try again.",
+                    detail="Failed to download a file. Please try again.",
                 ) from exc
 
             filename = path.split("/")[-1] if "/" in path else f"file_{index}"
@@ -144,3 +165,9 @@ async def download_files_as_zip(storage_paths: list[str], access_token: str) -> 
 
     zip_buffer.seek(0)
     return zip_buffer.read()
+
+
+async def download_files_as_zip(storage_paths: list[str], access_token: str) -> bytes:
+    return await run_in_threadpool(
+        _download_files_as_zip_sync, storage_paths, access_token
+    )

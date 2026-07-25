@@ -5,7 +5,7 @@ import {
   downloadSyllabusFiles,
   exportToGoogleCalendar,
   getSyllabi,
-  parseSyllabus,
+  saveSyllabus,
   toApiEventUpdate,
 } from "@/lib/api";
 import type { SavedEvent } from "@/types";
@@ -137,17 +137,15 @@ describe("api helpers", () => {
         new Response(
           JSON.stringify({
             syllabus_id: "syllabus-123",
-            events: [],
           }),
           { status: 200 }
         )
       )
     );
 
-    const formData = new FormData();
-    formData.append("files", new File(["content"], "syllabus.pdf"));
-
-    await expect(parseSyllabus(formData)).resolves.toEqual({
+    await expect(
+      saveSyllabus([new File(["content"], "syllabus.pdf")], [])
+    ).resolves.toEqual({
       syllabusId: "syllabus-123",
     });
   });
@@ -241,5 +239,67 @@ describe("api helpers", () => {
     await expect(deleteEvent("syllabus-1", "event-1")).resolves.toEqual({
       message: "Event deleted",
     });
+  });
+});
+
+describe("api base url resolution", () => {
+  const originalApiUrl = process.env.NEXT_PUBLIC_API_URL;
+  const originalNodeEnv = process.env.NODE_ENV;
+
+  beforeEach(() => {
+    mockGetAccessToken.mockResolvedValue("supabase-token");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    process.env.NEXT_PUBLIC_API_URL = originalApiUrl;
+    vi.stubEnv("NODE_ENV", originalNodeEnv);
+    vi.resetModules();
+  });
+
+  it("uses the configured NEXT_PUBLIC_API_URL when set", async () => {
+    vi.resetModules();
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.syllabuddy.app");
+    vi.stubEnv("NODE_ENV", "production");
+
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ syllabi: [] }), { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getSyllabi: getSyllabiFresh } = await import("@/lib/api");
+    await getSyllabiFresh();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.syllabuddy.app/files/",
+      expect.anything()
+    );
+  });
+
+  it("throws at module init in production when NEXT_PUBLIC_API_URL is missing", async () => {
+    vi.resetModules();
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+    vi.stubEnv("NODE_ENV", "production");
+
+    await expect(import("@/lib/api")).rejects.toThrow(/NEXT_PUBLIC_API_URL/);
+  });
+
+  it("falls back to localhost outside production when NEXT_PUBLIC_API_URL is missing", async () => {
+    vi.resetModules();
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+    vi.stubEnv("NODE_ENV", "development");
+
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ syllabi: [] }), { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getSyllabi: getSyllabiFresh } = await import("@/lib/api");
+    await getSyllabiFresh();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/files/",
+      expect.anything()
+    );
   });
 });

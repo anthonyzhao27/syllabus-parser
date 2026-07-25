@@ -119,7 +119,7 @@ class OutlookExportRequest(BaseModel):
 
 class GoogleExportRequest(BaseModel):
     events: list[ParsedEvent]
-    access_token: str | None = None
+    access_token: str | None = Field(default=None, repr=False)
     calendar_id: str = "primary"
     timezone: str = "UTC"
 

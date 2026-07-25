@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
+import { ParsedDataProvider } from "@/contexts/parsed-data-context";
 import { UploadForm } from "@/components/upload-form";
 
 const mockParseSyllabus = vi.fn();
@@ -17,11 +18,15 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 
+function renderWithProviders(ui: React.ReactElement) {
+  return render(<ParsedDataProvider>{ui}</ParsedDataProvider>);
+}
+
 describe("UploadForm", () => {
   it("rejects mixed multi-file uploads that are not all images", async () => {
     const user = userEvent.setup();
 
-    render(<UploadForm />);
+    renderWithProviders(<UploadForm />);
 
     const input = document.querySelector('input[type="file"]');
 
@@ -44,10 +49,11 @@ describe("UploadForm", () => {
   it("redirects to the canonical dashboard detail route after parse", async () => {
     const user = userEvent.setup();
     mockParseSyllabus.mockResolvedValue({
-      syllabusId: "syllabus-123",
+      events: [],
+      courseCode: "CSC209",
     });
 
-    render(<UploadForm />);
+    renderWithProviders(<UploadForm />);
 
     const input = document.querySelector('input[type="file"]');
 
@@ -60,10 +66,10 @@ describe("UploadForm", () => {
       new File(["doc"], "syllabus.pdf", { type: "application/pdf" })
     );
 
-    await user.click(screen.getByRole("button", { name: /parse and save syllabus/i }));
+    await user.click(screen.getByRole("button", { name: /parse syllabus/i }));
 
     await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith("/dashboard/syllabus-123?from=parse");
+      expect(mockPush).toHaveBeenCalledWith("/results");
     });
   });
 });

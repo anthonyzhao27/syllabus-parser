@@ -166,7 +166,9 @@ class TestOutlookExport:
             in response.headers["content-disposition"]
         )
 
-    def test_multiple_events_returns_ics(self, authenticated_client: TestClient) -> None:
+    def test_multiple_events_returns_ics(
+        self, authenticated_client: TestClient
+    ) -> None:
         payload = _outlook_payload()
         payload["events"] = [
             {
@@ -279,7 +281,9 @@ class TestGoogleExport:
                 "calendar_name": "Syllabuddy - CSC413",
             },
         ):
-            response = authenticated_client.post("/export/google", json=_google_payload())
+            response = authenticated_client.post(
+                "/export/google", json=_google_payload()
+            )
 
         assert response.status_code == 200
         assert response.json()["created_count"] == 1
@@ -359,7 +363,26 @@ class TestGoogleExport:
             "app.routers.export.export_to_google_calendar_sync",
             side_effect=RuntimeError("upstream failed"),
         ):
-            response = authenticated_client.post("/export/google", json=_google_payload())
+            response = authenticated_client.post(
+                "/export/google", json=_google_payload()
+            )
 
         assert response.status_code == 502
-        assert "Google Calendar error" in response.json()["detail"]
+        assert response.json()["detail"] == "Google Calendar export failed"
+        # Ensure upstream exception detail is not echoed back.
+        assert "upstream failed" not in response.text
+
+    def test_api_failure_does_not_leak_access_token(
+        self,
+        authenticated_client: TestClient,
+    ) -> None:
+        payload = _google_payload()
+        secret = "super-secret-access-token"
+        payload["access_token"] = secret
+        with patch(
+            "app.routers.export.export_to_google_calendar_sync",
+            side_effect=RuntimeError(f"upstream failed: token={secret}"),
+        ):
+            response = authenticated_client.post("/export/google", json=payload)
+        assert response.status_code == 502
+        assert secret not in response.text

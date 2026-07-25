@@ -4,10 +4,19 @@ import mimetypes
 from collections import Counter
 from datetime import date, datetime, time
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import Response
 
 from app.middleware.auth import AuthenticatedUser, get_current_user
+from app.middleware.limiter import limiter
 from app.models.schemas import (
     DeleteResponse,
     EventResponse,
@@ -21,7 +30,7 @@ from app.models.schemas import (
 )
 from app.services import storage as storage_service
 from app.services import syllabi as syllabi_service
-from app.services.extraction import _is_image
+from app.services.extraction import classify_upload
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +38,9 @@ router = APIRouter()
 
 
 @router.post("/", response_model=SaveResponse)
+@limiter.limit("20/hour;60/day")
 async def save_syllabus(
+    request: Request,
     files: list[UploadFile] = File(default=[]),
     events_json: str = Form(...),
     syllabus_name: str | None = Form(default=None),
@@ -49,7 +60,8 @@ async def save_syllabus(
     except (json.JSONDecodeError, TypeError) as e:
         raise HTTPException(status_code=400, detail=f"Invalid events JSON: {e}")
 
-    if _is_image(files[0]):
+    first_kind = await classify_upload(files[0])
+    if first_kind == "image":
         source_type = "screenshots"
         original_filename = None
     else:
@@ -186,7 +198,10 @@ def _normalize_due_date_update(
         ) != time(23, 59):
             raise HTTPException(
                 status_code=422,
-                detail="time_specified=false requires a date-only value or a 23:59 datetime",
+                detail=(
+                    "time_specified=false requires a date-only value or a "
+                    "23:59 datetime"
+                ),
             )
         return due_date_value.isoformat(), (
             explicit_time_specified if explicit_time_specified is not None else True
@@ -249,7 +264,9 @@ async def get_syllabus_detail(
 
 
 @router.patch("/{syllabus_id}", response_model=SyllabusResponse)
+@limiter.limit("120/hour")
 async def update_syllabus(
+    request: Request,
     syllabus_id: str,
     updates: SyllabusUpdateRequest,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -274,7 +291,9 @@ async def update_syllabus(
 
 
 @router.delete("/{syllabus_id}", response_model=DeleteResponse)
+@limiter.limit("120/hour")
 async def delete_syllabus(
+    request: Request,
     syllabus_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> DeleteResponse:
@@ -342,7 +361,9 @@ async def download_original_file(
 
 
 @router.patch("/{syllabus_id}/events/{event_id}", response_model=EventResponse)
+@limiter.limit("120/hour")
 async def update_event(
+    request: Request,
     syllabus_id: str,
     event_id: str,
     updates: EventUpdateRequest,
@@ -394,7 +415,9 @@ async def update_event(
 
 
 @router.delete("/{syllabus_id}/events/{event_id}", response_model=DeleteResponse)
+@limiter.limit("120/hour")
 async def delete_event(
+    request: Request,
     syllabus_id: str,
     event_id: str,
     user: AuthenticatedUser = Depends(get_current_user),

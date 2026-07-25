@@ -3,19 +3,24 @@
 import logging
 from datetime import date, datetime, timedelta
 from datetime import time as dt_time
+from itertools import islice
 from typing import Generator
 
 from dateutil.relativedelta import relativedelta
 
 from app.models.schemas import (
     ParsedEvent,
-    Recurrence,
     RecurrenceFrequency,
     RecurringEvent,
     Weekday,
 )
 
 logger = logging.getLogger(__name__)
+
+# Hard cap on occurrences expanded from a single recurring event. Bounds memory
+# / CPU if a (possibly injected) recurrence spans an absurd date range; a real
+# course recurrence never approaches this.
+MAX_OCCURRENCES = 1000
 
 WEEKDAY_MAP: dict[Weekday, int] = {
     Weekday.MONDAY: 0,
@@ -48,9 +53,7 @@ def _generate_weekly_dates(
     target_weekday = WEEKDAY_MAP[weekday]
 
     if start_date.weekday() != target_weekday:
-        raise ValueError(
-            f"start_date {start_date} does not match weekday {weekday}"
-        )
+        raise ValueError(f"start_date {start_date} does not match weekday {weekday}")
 
     current = start_date
 
@@ -98,19 +101,34 @@ def expand_recurrence(recurring: RecurringEvent) -> list[ParsedEvent]:
     exclusions = set(rec.exclusions) if rec.exclusions else set()
 
     if rec.frequency == RecurrenceFrequency.DAILY:
-        dates = list(_generate_daily_dates(
-            rec.start_date, rec.end_date, rec.interval, exclusions
-        ))
+        dates = list(
+            islice(
+                _generate_daily_dates(
+                    rec.start_date, rec.end_date, rec.interval, exclusions
+                ),
+                MAX_OCCURRENCES,
+            )
+        )
     elif rec.frequency == RecurrenceFrequency.WEEKLY:
         if rec.weekday is None:
             raise ValueError("Weekly recurrence requires weekday, got None")
-        dates = list(_generate_weekly_dates(
-            rec.start_date, rec.end_date, rec.weekday, rec.interval, exclusions
-        ))
+        dates = list(
+            islice(
+                _generate_weekly_dates(
+                    rec.start_date, rec.end_date, rec.weekday, rec.interval, exclusions
+                ),
+                MAX_OCCURRENCES,
+            )
+        )
     elif rec.frequency == RecurrenceFrequency.MONTHLY:
-        dates = list(_generate_monthly_dates(
-            rec.start_date, rec.end_date, rec.interval, exclusions
-        ))
+        dates = list(
+            islice(
+                _generate_monthly_dates(
+                    rec.start_date, rec.end_date, rec.interval, exclusions
+                ),
+                MAX_OCCURRENCES,
+            )
+        )
     else:
         raise ValueError(f"Unknown frequency: {rec.frequency}")
 
@@ -125,15 +143,17 @@ def expand_recurrence(recurring: RecurringEvent) -> list[ParsedEvent]:
 
         title = f"{recurring.title} {i}" if len(dates) > 1 else recurring.title
 
-        events.append(ParsedEvent(
-            title=title,
-            due_date=dt,
-            course=recurring.course,
-            event_type=recurring.event_type,
-            description=recurring.description,
-            time_specified=time_specified,
-            duration_minutes=recurring.duration_minutes,
-        ))
+        events.append(
+            ParsedEvent(
+                title=title,
+                due_date=dt,
+                course=recurring.course,
+                event_type=recurring.event_type,
+                description=recurring.description,
+                time_specified=time_specified,
+                duration_minutes=recurring.duration_minutes,
+            )
+        )
 
     return events
 
@@ -148,7 +168,5 @@ def expand_all_recurrences(
             expanded = expand_recurrence(recurring)
             all_events.extend(expanded)
         except ValueError as e:
-            logger.warning(
-                "Skipping invalid recurrence '%s': %s", recurring.title, e
-            )
+            logger.warning("Skipping invalid recurrence '%s': %s", recurring.title, e)
     return all_events

@@ -63,7 +63,10 @@ def test_list_user_syllabi(
     mock_list_syllabi: AsyncMock,
     authenticated_client: TestClient,
 ) -> None:
-    mock_list_syllabi.return_value = [_syllabus_row("syllabus-1"), _syllabus_row("syllabus-2")]
+    mock_list_syllabi.return_value = [
+        _syllabus_row("syllabus-1"),
+        _syllabus_row("syllabus-2"),
+    ]
     mock_counts.return_value = {"syllabus-1": 3, "syllabus-2": 1}
 
     response = authenticated_client.get("/files/")
@@ -156,7 +159,9 @@ def test_download_multiple_files_as_zip(
     assert response.status_code == 200
     assert response.content == b"zip-bytes"
     assert response.headers["content-type"] == "application/zip"
-    assert 'filename="CSC413 Winter 2025.zip"' in response.headers["content-disposition"]
+    assert (
+        'filename="CSC413 Winter 2025.zip"' in response.headers["content-disposition"]
+    )
 
 
 @patch("app.routers.files.syllabi_service.get_event", new_callable=AsyncMock)

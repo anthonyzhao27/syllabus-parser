@@ -1,6 +1,5 @@
 import ssl
 from dataclasses import dataclass
-from functools import lru_cache
 
 import certifi
 import jwt
@@ -20,20 +19,25 @@ class AuthenticatedUser:
     access_token: str
 
 
-@lru_cache(maxsize=1)
+_jwks_client: PyJWKClient | None = None
+
+
 def get_jwks_client() -> PyJWKClient:
-    if not settings.supabase_url:
-        raise HTTPException(
-            status_code=503,
-            detail="Authentication is not configured",
+    global _jwks_client
+    if _jwks_client is None:
+        if not settings.supabase_url:
+            raise HTTPException(
+                status_code=503,
+                detail="Authentication is not configured",
+            )
+        ssl_context = ssl.create_default_context(cafile=certifi.where())
+        _jwks_client = PyJWKClient(
+            f"{settings.supabase_url}/auth/v1/.well-known/jwks.json",
+            cache_keys=True,
+            lifespan=3600,
+            ssl_context=ssl_context,
         )
-    ssl_context = ssl.create_default_context(cafile=certifi.where())
-    return PyJWKClient(
-        f"{settings.supabase_url}/auth/v1/.well-known/jwks.json",
-        cache_keys=True,
-        lifespan=3600,
-        ssl_context=ssl_context,
-    )
+    return _jwks_client
 
 
 def decode_jwt(token: str) -> dict[str, object]:

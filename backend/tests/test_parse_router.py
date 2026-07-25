@@ -5,10 +5,18 @@ import zlib
 from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.models.schemas import ParsedEvent
+
+_STALE_SAVE_FLOW = pytest.mark.skip(
+    reason=(
+        "Stale: /parse no longer saves; persistence is now covered by "
+        "test_files_router.py against POST /files/."
+    )
+)
 
 
 def _mock_events() -> list[ParsedEvent]:
@@ -46,6 +54,7 @@ def test_parse_requires_auth(api_client: TestClient, generated_pdf_path) -> None
     assert resp.status_code == 401
 
 
+@_STALE_SAVE_FLOW
 @patch(
     "app.routers.parse.extract_events",
     new_callable=AsyncMock,
@@ -78,6 +87,7 @@ def test_parse_pdf_upload(
     mock_save_events.assert_awaited_once()
 
 
+@_STALE_SAVE_FLOW
 @patch(
     "app.routers.parse.extract_events",
     new_callable=AsyncMock,
@@ -140,7 +150,9 @@ def test_parse_rejects_mixed_screenshot_batch(
         ],
     )
     assert resp.status_code == 400
-    assert resp.json()["detail"] == "When uploading screenshots, all files must be images."
+    assert (
+        resp.json()["detail"] == "When uploading screenshots, all files must be images."
+    )
     mock_vision.assert_not_awaited()
 
 
@@ -166,6 +178,7 @@ def test_parse_rejects_oversized_upload_before_extraction(
     mock_extract_text.assert_not_awaited()
 
 
+@_STALE_SAVE_FLOW
 @patch(
     "app.routers.parse.extract_text",
     new_callable=AsyncMock,
@@ -198,6 +211,7 @@ def test_parse_returns_503_when_upload_fails(
     mock_create_syllabus.assert_not_awaited()
 
 
+@_STALE_SAVE_FLOW
 @patch(
     "app.routers.parse.extract_text",
     new_callable=AsyncMock,

@@ -2,11 +2,12 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 
 from app.middleware.auth import AuthenticatedUser, get_current_user
+from app.middleware.limiter import limiter
 from app.models.schemas import (
     GoogleExportRequest,
     GoogleExportResponse,
@@ -28,21 +29,23 @@ router = APIRouter()
 
 
 @router.post("/ics")
+@limiter.limit("30/hour")
 async def export_ics(
-    request: IcsExportRequest,
+    request: Request,
+    body: IcsExportRequest,
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> Response:
     """Generate and return an .ics file for download."""
-    if not request.events:
+    if not body.events:
         raise HTTPException(status_code=400, detail="No events to export")
 
     try:
-        course_code = validate_and_get_course_code(request.events)
+        course_code = validate_and_get_course_code(body.events)
         calendar_name = get_calendar_name(course_code)
     except (MissingCourseCodeError, MixedCourseError) as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    ics_content = create_ics(request.events, request.timezone, calendar_name)
+    ics_content = create_ics(body.events, body.timezone, calendar_name)
     filename = f"{sanitize_filename(calendar_name)}.ics"
 
     return Response(
@@ -53,21 +56,23 @@ async def export_ics(
 
 
 @router.post("/outlook")
+@limiter.limit("30/hour")
 async def export_outlook(
-    request: OutlookExportRequest,
+    request: Request,
+    body: OutlookExportRequest,
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> Response:
     """Export events to Outlook as ICS file."""
-    if not request.events:
+    if not body.events:
         raise HTTPException(status_code=400, detail="No events to export")
 
     try:
-        course_code = validate_and_get_course_code(request.events)
+        course_code = validate_and_get_course_code(body.events)
         calendar_name = get_calendar_name(course_code)
     except (MissingCourseCodeError, MixedCourseError) as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    ics_content = create_ics(request.events, request.timezone, calendar_name)
+    ics_content = create_ics(body.events, body.timezone, calendar_name)
     filename = f"{sanitize_filename(calendar_name)}.ics"
 
     return Response(
@@ -78,27 +83,29 @@ async def export_outlook(
 
 
 @router.post("/google", response_model=GoogleExportResponse)
+@limiter.limit("15/hour;40/day")
 async def export_google(
-    request: GoogleExportRequest,
+    request: Request,
+    body: GoogleExportRequest,
     user: AuthenticatedUser = Depends(get_current_user),
 ):
     """Export events to Google Calendar using OAuth token."""
-    if not request.events:
+    if not body.events:
         raise HTTPException(status_code=400, detail="No events to export")
 
-    if not request.access_token:
+    if not body.access_token:
         raise HTTPException(status_code=400, detail="Access token required")
 
     try:
         result = await run_in_threadpool(
             export_to_google_calendar_sync,
-            request.events,
-            request.access_token,
-            request.timezone,
+            body.events,
+            body.access_token,
+            body.timezone,
         )
         return GoogleExportResponse(**result)
     except (MissingCourseCodeError, MixedCourseError) as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except Exception:
         logger.exception("Google Calendar export failed")
-        raise HTTPException(status_code=502, detail=f"Google Calendar error: {str(e)}")
+        raise HTTPException(status_code=502, detail="Google Calendar export failed")

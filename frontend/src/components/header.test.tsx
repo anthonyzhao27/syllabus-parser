@@ -1,11 +1,10 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
 import { Header } from "@/components/header";
 
 const mockUseAuth = vi.fn();
 const mockPathname = vi.fn();
-const mockReplace = vi.fn<(href: string) => void>();
 const mockSignOut = vi.fn<() => Promise<{ error: null }>>();
 
 vi.mock("@/contexts/auth-context", () => ({
@@ -15,7 +14,7 @@ vi.mock("@/contexts/auth-context", () => ({
 vi.mock("next/navigation", () => ({
   usePathname: () => mockPathname(),
   useRouter: () => ({
-    replace: mockReplace,
+    replace: vi.fn(),
   }),
 }));
 
@@ -42,6 +41,12 @@ describe("Header", () => {
 
   it("opens the account menu and signs out", async () => {
     const user = userEvent.setup();
+    const hrefSetter = vi.fn();
+    Object.defineProperty(window, "location", {
+      value: { ...window.location, set href(v: string) { hrefSetter(v); } },
+      writable: true,
+      configurable: true,
+    });
 
     render(<Header />);
 
@@ -51,6 +56,8 @@ describe("Header", () => {
     await user.click(screen.getByRole("button", { name: /sign out/i }));
 
     expect(mockSignOut).toHaveBeenCalled();
-    expect(mockReplace).toHaveBeenCalledWith("/login");
+    await waitFor(() => {
+      expect(hrefSetter).toHaveBeenCalledWith("/login");
+    });
   });
 });
