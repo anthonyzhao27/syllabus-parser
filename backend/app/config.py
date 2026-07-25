@@ -1,5 +1,7 @@
+from typing import Annotated
+
 from pydantic import field_validator, model_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, NoDecode
 
 # Default CORS origins used in development. In production the deployer MUST
 # override allowed_origins (via the ALLOWED_ORIGINS env var) so the app does
@@ -31,7 +33,9 @@ class Settings(BaseSettings):
     twilio_auth_token: str = ""
     twilio_from_number: str = ""
     max_file_size_mb: int = 10
-    allowed_origins: list[str] = list(DEFAULT_ALLOWED_ORIGINS)
+    # NoDecode stops pydantic-settings from JSON-decoding the env value so the
+    # validator below can split a plain comma-separated ALLOWED_ORIGINS string.
+    allowed_origins: Annotated[list[str], NoDecode] = list(DEFAULT_ALLOWED_ORIGINS)
 
     @field_validator("allowed_origins", mode="before")
     @classmethod

@@ -70,3 +70,20 @@ def test_production_fully_configured_succeeds():
 
     assert settings.is_production is True
     assert settings.allowed_origins == ["https://syllabuddy.example.com"]
+
+
+def test_allowed_origins_parses_comma_separated_env(monkeypatch):
+    """ALLOWED_ORIGINS is a plain comma-separated env string, not JSON.
+
+    Regression: without NoDecode, pydantic-settings JSON-decodes the list field
+    from the env source and raises SettingsError on a plain string.
+    """
+    monkeypatch.setenv("ALLOWED_ORIGINS", "https://a.com, https://b.com")
+    settings = Settings(_env_file=None)
+    assert settings.allowed_origins == ["https://a.com", "https://b.com"]
+
+
+def test_allowed_origins_single_env_value(monkeypatch):
+    monkeypatch.setenv("ALLOWED_ORIGINS", "https://only.example.com")
+    settings = Settings(_env_file=None)
+    assert settings.allowed_origins == ["https://only.example.com"]
